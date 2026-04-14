@@ -1,0 +1,120 @@
+@import "tailwindcss";
+
+@theme {
+  --color-app-bg: var(--app-bg);
+  --color-panel-bg: var(--panel-bg);
+  --color-panel-muted: var(--panel-muted);
+  --color-panel-border: var(--panel-border);
+  --color-board-shell: var(--board-shell);
+  --color-cell-bg: var(--cell-bg);
+  --color-cell-hover: var(--cell-hover);
+  --color-cell-border: var(--cell-border);
+  --color-cell-highlight: var(--cell-highlight);
+  --color-cell-highlight-border: var(--cell-highlight-border);
+  --color-cell-highlight-ring: var(--cell-highlight-ring);
+  --color-cell-highlight-text: var(--cell-highlight-text);
+  --color-cell-erased: var(--cell-erased);
+  --color-cell-erased-border: var(--cell-erased-border);
+  --color-target-bg: var(--target-bg);
+  --color-target-border: var(--target-border);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-text-faint: var(--text-faint);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-glow-primary: var(--glow-primary);
+  --color-glow-secondary: var(--glow-secondary);
+}
+
+:root {
+  color-scheme: dark;
+  --app-bg: #090b13;
+  --panel-bg: rgba(14, 18, 33, 0.86);
+  --panel-muted: rgba(22, 26, 46, 0.95);
+  --panel-border: rgba(147, 157, 194, 0.18);
+  --board-shell: rgba(9, 13, 25, 0.9);
+  --cell-bg: #0b0e18;
+  --cell-hover: #13182a;
+  --cell-border: rgba(110, 122, 165, 0.28);
+  --cell-highlight: linear-gradient(180deg, #28314c 0%, #151d35 100%);
+  --cell-highlight-border: rgba(255, 255, 255, 0.92);
+  --cell-highlight-ring: rgba(255, 255, 255, 0.7);
+  --cell-highlight-text: #ffffff;
+  --cell-erased: rgba(44, 49, 72, 0.9);
+  --cell-erased-border: rgba(126, 136, 170, 0.18);
+  --target-bg: rgba(44, 49, 72, 0.96);
+  --target-border: rgba(132, 142, 182, 0.18);
+  --text-primary: #f6f4fb;
+  --text-secondary: rgba(237, 237, 244, 0.78);
+  --text-muted: rgba(178, 184, 212, 0.72);
+  --text-faint: rgba(136, 143, 170, 0.7);
+  --accent: #f77aa8;
+  --accent-soft: rgba(247, 122, 168, 0.14);
+  --glow-primary: rgba(247, 122, 168, 0.18);
+  --glow-secondary: rgba(101, 129, 255, 0.18);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --app-bg: #f5efe7;
+  --panel-bg: rgba(255, 251, 246, 0.88);
+  --panel-muted: rgba(245, 238, 228, 0.96);
+  --panel-border: rgba(116, 96, 88, 0.15);
+  --board-shell: rgba(250, 246, 240, 0.94);
+  --cell-bg: #fffdfa;
+  --cell-hover: #f8f0e7;
+  --cell-border: rgba(126, 105, 94, 0.18);
+  --cell-highlight: linear-gradient(180deg, #e7d7d8 0%, #dccbcd 100%);
+  --cell-highlight-border: rgba(198, 165, 171, 0.55);
+  --cell-highlight-ring: rgba(255, 248, 250, 0.82);
+  --cell-highlight-text: #2b2434;
+  --cell-erased: rgba(231, 222, 213, 0.9);
+  --cell-erased-border: rgba(145, 127, 117, 0.18);
+  --target-bg: rgba(233, 224, 214, 0.92);
+  --target-border: rgba(126, 105, 94, 0.14);
+  --text-primary: #1f1f2d;
+  --text-secondary: rgba(42, 34, 52, 0.76);
+  --text-muted: rgba(92, 79, 93, 0.68);
+  --text-faint: rgba(128, 110, 123, 0.66);
+  --accent: #d75b88;
+  --accent-soft: rgba(215, 91, 136, 0.14);
+  --glow-primary: rgba(215, 91, 136, 0.16);
+  --glow-secondary: rgba(106, 141, 255, 0.12);
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    background: var(--app-bg);
+    overscroll-behavior-y: none;
+  }
+
+  body {
+    margin: 0;
+    min-width: 320px;
+    overscroll-behavior-y: none;
+    background:
+      radial-gradient(circle at top, rgba(255, 255, 255, 0.08), transparent 34%),
+      var(--app-bg);
+    color: var(--text-primary);
+    font-family: "Aptos", "Segoe UI", sans-serif;
+  }
+
+  button {
+    font: inherit;
+  }
+}
+
+@keyframes wrongFlash {
+  0% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
