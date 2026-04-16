@@ -1,9 +1,15 @@
 import { Heart } from "lucide-react";
 
-export function Hearts({ hearts }: { hearts: number }) {
+export function Hearts({
+  hearts,
+  maxHearts,
+}: {
+  hearts: number;
+  maxHearts: number;
+}) {
   return (
     <div className="flex items-center gap-2">
-      {Array.from({ length: 3 }, (_, index) => (
+      {Array.from({ length: maxHearts }, (_, index) => (
         <span
           key={index}
           className={`flex h-8 w-8 items-center justify-center rounded-full border ${

@@ -1,6 +1,43 @@
+import {
+  getLevelBlueprint,
+  MISSION_DETAILS,
+  MODIFIER_DETAILS,
+  type MissionId,
+  type ModifierId,
+} from "./progression";
+
 export type DifficultyId = "easy" | "medium" | "hard" | "expert" | "mythic";
 
 export type CellMark = "hidden" | "selected" | "erased";
+
+export type ToolMode = "select" | "erase";
+
+export type TargetAxis = "row" | "column";
+
+export type RevealedCell = {
+  row: number;
+  col: number;
+  mark: Exclude<CellMark, "hidden">;
+};
+
+export type HiddenTarget = {
+  axis: TargetAxis;
+  index: number;
+  revealAfterMarks: number;
+};
+
+export type PuzzleMission = {
+  id: MissionId;
+  title: string;
+  description: string;
+};
+
+export type PuzzleModifier = {
+  id: ModifierId;
+  title: string;
+  short: string;
+  description: string;
+};
 
 export type Puzzle = {
   id: string;
@@ -11,6 +48,15 @@ export type Puzzle = {
   solution: boolean[][];
   rowTargets: number[];
   colTargets: number[];
+  modifiers: PuzzleModifier[];
+  missions: PuzzleMission[];
+  revealedMarks?: RevealedCell[];
+  hiddenTargets?: HiddenTarget[];
+  initialMode?: ToolMode;
+  toolUnlockCorrectMarks?: number;
+  maxHearts: number;
+  chapter: string;
+  bandLabel: string;
 };
 
 export type DifficultyConfig = {
@@ -110,7 +156,6 @@ type SolverCell = {
 };
 
 const GENERATOR_TRIES = 240;
-
 const subsetMemo = new Map<string, boolean>();
 
 function randomInt(min: number, max: number) {
@@ -247,7 +292,12 @@ function canMakeProduct(values: number[], target: number) {
   return result;
 }
 
-function countSolutions(board: number[][], rowTargets: number[], colTargets: number[], maxSolutions = 2) {
+export function countSolutions(
+  board: number[][],
+  rowTargets: number[],
+  colTargets: number[],
+  maxSolutions = 2,
+) {
   const size = board.length;
   const cells = createMatrix(size, (row, col) => ({
     row,
@@ -271,12 +321,18 @@ function countSolutions(board: number[][], rowTargets: number[], colTargets: num
     const touchedRows = rowsToCheck ?? rowRemaining.map((_, index) => index);
     const touchedCols = colsToCheck ?? colRemaining.map((_, index) => index);
 
-    return touchedRows.every(
-      (row) => rowRemaining[row] >= 1 && canMakeProduct(rowUndecided[row], rowRemaining[row]),
-    ) &&
+    return (
+      touchedRows.every(
+        (row) =>
+          rowRemaining[row] >= 1 &&
+          canMakeProduct(rowUndecided[row], rowRemaining[row]),
+      ) &&
       touchedCols.every(
-        (col) => colRemaining[col] >= 1 && canMakeProduct(colUndecided[col], colRemaining[col]),
-      );
+        (col) =>
+          colRemaining[col] >= 1 &&
+          canMakeProduct(colUndecided[col], colRemaining[col]),
+      )
+    );
   };
 
   const removeUndecidedValue = (values: number[], value: number) => {
@@ -311,7 +367,7 @@ function countSolutions(board: number[][], rowTargets: number[], colTargets: num
         best = { cell, options };
       }
 
-      if (best?.options.length === 1) {
+      if (best.options.length === 1) {
         break;
       }
     }
@@ -327,7 +383,10 @@ function countSolutions(board: number[][], rowTargets: number[], colTargets: num
     const next = chooseCell();
 
     if (!next) {
-      if (rowRemaining.every((value) => value === 1) && colRemaining.every((value) => value === 1)) {
+      if (
+        rowRemaining.every((value) => value === 1) &&
+        colRemaining.every((value) => value === 1)
+      ) {
         solutions += 1;
       }
 
@@ -455,11 +514,7 @@ function buildBoard(config: DifficultyConfig, solution: boolean[][]) {
           ),
         );
         const fitBoost =
-          1 +
-          Math.max(
-            0,
-            1 - Math.abs(value - idealValue) / Math.max(1, idealValue),
-          );
+          1 + Math.max(0, 1 - Math.abs(value - idealValue) / Math.max(1, idealValue));
 
         return {
           value,
@@ -475,7 +530,9 @@ function buildBoard(config: DifficultyConfig, solution: boolean[][]) {
   };
 
   const selectedCells = shuffle(
-    createMatrix(config.size, (row, col) => ({ row, col })).flat().filter(({ row, col }) => solution[row][col]),
+    createMatrix(config.size, (row, col) => ({ row, col }))
+      .flat()
+      .filter(({ row, col }) => solution[row][col]),
   );
 
   for (const { row, col } of selectedCells) {
@@ -517,8 +574,57 @@ function isPuzzleBalanced(board: number[][], solution: boolean[][], config: Diff
   );
 }
 
+function createRevealedMarks(solution: boolean[][], requestedCount: number) {
+  if (requestedCount <= 0) {
+    return [];
+  }
+
+  const preferred = shuffle(
+    solution
+      .flatMap((line, row) =>
+        line.map((selected, col) => ({
+          row,
+          col,
+          selected,
+        })),
+      )
+      .sort((left, right) => Number(right.selected) - Number(left.selected)),
+  );
+
+  return preferred.slice(0, Math.min(requestedCount, preferred.length)).map((cell) => ({
+    row: cell.row,
+    col: cell.col,
+    mark: cell.selected ? ("selected" as const) : ("erased" as const),
+  }));
+}
+
+function createHiddenTargets(size: number, count: number): HiddenTarget[] {
+  if (count <= 0) {
+    return [];
+  }
+
+  const rows = shuffle(
+    Array.from({ length: size }, (_, index) => ({
+      axis: "row" as const,
+      index,
+    })),
+  );
+  const cols = shuffle(
+    Array.from({ length: size }, (_, index) => ({
+      axis: "column" as const,
+      index,
+    })),
+  );
+
+  return shuffle([...rows.slice(0, count), ...cols.slice(0, count)]).slice(0, count).map((target) => ({
+    ...target,
+    revealAfterMarks: Math.min(3, Math.max(2, Math.ceil(size / 2))),
+  }));
+}
+
 export function createPuzzle(level: number, difficulty: DifficultyId): Puzzle {
   const config = DIFFICULTIES[difficulty];
+  const blueprint = getLevelBlueprint(difficulty, level);
 
   for (let attempt = 0; attempt < GENERATOR_TRIES; attempt += 1) {
     const solution = buildSolution(config);
@@ -548,6 +654,21 @@ export function createPuzzle(level: number, difficulty: DifficultyId): Puzzle {
       solution,
       rowTargets,
       colTargets,
+      modifiers: blueprint.modifiers.map((id) => ({
+        id,
+        ...MODIFIER_DETAILS[id],
+      })),
+      missions: blueprint.missions.map((id) => ({
+        id,
+        ...MISSION_DETAILS[id],
+      })),
+      revealedMarks: createRevealedMarks(solution, blueprint.lockedCells ?? 0),
+      hiddenTargets: createHiddenTargets(config.size, blueprint.hiddenTargets ?? 0),
+      initialMode: blueprint.lockMode,
+      toolUnlockCorrectMarks: blueprint.toolUnlockCorrectMarks,
+      maxHearts: blueprint.maxHearts,
+      chapter: blueprint.chapter,
+      bandLabel: blueprint.bandLabel,
     };
   }
 
@@ -558,16 +679,48 @@ export function createEmptyMarks(size: number) {
   return createMatrix<CellMark>(size, () => "hidden");
 }
 
+export function applyRevealedMarks(
+  marks: CellMark[][],
+  revealedMarks: RevealedCell[] | undefined,
+) {
+  if (!revealedMarks?.length) {
+    return marks;
+  }
+
+  const nextMarks = marks.map((line) => [...line]);
+
+  for (const revealed of revealedMarks) {
+    nextMarks[revealed.row][revealed.col] = revealed.mark;
+  }
+
+  return nextMarks;
+}
+
+export function isCellLocked(puzzle: Puzzle, row: number, col: number) {
+  return (
+    puzzle.revealedMarks?.some(
+      (revealed) => revealed.row === row && revealed.col === col,
+    ) ?? false
+  );
+}
+
 export function getRowProgress(puzzle: Puzzle, marks: CellMark[][], row: number) {
   return product(
-    puzzle.board[row].filter((_, col) => marks[row][col] === "selected" && puzzle.solution[row][col]),
+    puzzle.board[row].filter(
+      (_, col) =>
+        marks[row][col] === "selected" && puzzle.solution[row][col],
+    ),
   );
 }
 
 export function getColProgress(puzzle: Puzzle, marks: CellMark[][], col: number) {
   return product(
     puzzle.board
-      .map((line, row) => ({ value: line[col], mark: marks[row][col], selected: puzzle.solution[row][col] }))
+      .map((line, row) => ({
+        value: line[col],
+        mark: marks[row][col],
+        selected: puzzle.solution[row][col],
+      }))
       .filter((cell) => cell.mark === "selected" && cell.selected)
       .map((cell) => cell.value),
   );
@@ -587,9 +740,97 @@ export function isColResolved(puzzle: Puzzle, marks: CellMark[][], col: number) 
   });
 }
 
+export function getResolvedLineCount(puzzle: Puzzle, marks: CellMark[][]) {
+  const rows = Array.from({ length: puzzle.size }, (_, row) =>
+    isRowResolved(puzzle, marks, row),
+  ).filter(Boolean).length;
+  const cols = Array.from({ length: puzzle.size }, (_, col) =>
+    isColResolved(puzzle, marks, col),
+  ).filter(Boolean).length;
+
+  return rows + cols;
+}
+
+export function getCorrectMarkCount(puzzle: Puzzle, marks: CellMark[][]) {
+  let total = 0;
+
+  for (let row = 0; row < puzzle.size; row += 1) {
+    for (let col = 0; col < puzzle.size; col += 1) {
+      const mark = marks[row][col];
+
+      if (mark === "hidden") {
+        continue;
+      }
+
+      const expected = puzzle.solution[row][col] ? "selected" : "erased";
+
+      if (mark === expected) {
+        total += 1;
+      }
+    }
+  }
+
+  return total;
+}
+
+export function getMarksCommittedOnLine(
+  puzzle: Puzzle,
+  marks: CellMark[][],
+  axis: TargetAxis,
+  index: number,
+) {
+  if (axis === "row") {
+    return puzzle.board[index].filter((_, col) => marks[index][col] !== "hidden").length;
+  }
+
+  return puzzle.board.filter((_, row) => marks[row][index] !== "hidden").length;
+}
+
+export function isTargetHidden(
+  puzzle: Puzzle,
+  marks: CellMark[][],
+  axis: TargetAxis,
+  index: number,
+) {
+  const hiddenTarget = puzzle.hiddenTargets?.find(
+    (target) => target.axis === axis && target.index === index,
+  );
+
+  if (!hiddenTarget) {
+    return false;
+  }
+
+  return getMarksCommittedOnLine(puzzle, marks, axis, index) < hiddenTarget.revealAfterMarks;
+}
+
+export function getVisibleTarget(
+  puzzle: Puzzle,
+  marks: CellMark[][],
+  axis: TargetAxis,
+  index: number,
+) {
+  if (isTargetHidden(puzzle, marks, axis, index)) {
+    return null;
+  }
+
+  return axis === "row" ? puzzle.rowTargets[index] : puzzle.colTargets[index];
+}
+
+export function areAllRowsResolved(puzzle: Puzzle, marks: CellMark[][]) {
+  return Array.from({ length: puzzle.size }, (_, row) => isRowResolved(puzzle, marks, row)).every(Boolean);
+}
+
+export function areAllRowTargetsMet(puzzle: Puzzle, marks: CellMark[][]) {
+  return Array.from({ length: puzzle.size }, (_, row) =>
+    getRowProgress(puzzle, marks, row) === puzzle.rowTargets[row],
+  ).every(Boolean);
+}
+
 export function isPuzzleSolved(puzzle: Puzzle, marks: CellMark[][]) {
   return marks.every((line, row) =>
-    line.every((mark, col) => (puzzle.solution[row][col] ? mark === "selected" : mark === "erased")),
+    line.every((mark, col) =>
+      puzzle.solution[row][col] ? mark === "selected" : mark === "erased",
+    ),
   );
 }
 
@@ -598,13 +839,14 @@ export function revealHint(
   marks: CellMark[][],
 ): { row: number; col: number; mark: CellMark } | null {
   const candidates = shuffle(
-    marks
-      .flatMap((line, row) =>
-        line
-          .map((mark, col) => ({ row, col, mark }))
-          .filter(({ mark }) => mark === "hidden"),
-      )
-      .filter(({ row, col }) => puzzle.solution[row][col] || !puzzle.solution[row][col]),
+    marks.flatMap((line, row) =>
+      line
+        .map((mark, col) => ({ row, col, mark }))
+        .filter(({ mark }) => mark === "hidden")
+        .filter(({ row: candidateRow, col: candidateCol }) =>
+          !isCellLocked(puzzle, candidateRow, candidateCol),
+        ),
+    ),
   );
 
   const choice = candidates[0];
