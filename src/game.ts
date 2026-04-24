@@ -2,6 +2,7 @@ import {
   getLevelBlueprint,
   MISSION_DETAILS,
   MODIFIER_DETAILS,
+  type LevelBlueprint,
   type MissionId,
   type ModifierId,
 } from "./progression";
@@ -36,6 +37,40 @@ export type HiddenTarget = {
 export type CrossBlind = {
   hiddenAxis: TargetAxis;
   unlockAfterMatchedVisibleLines: number;
+};
+
+export type DelayedCell = {
+  row: number;
+  col: number;
+};
+
+export type DelayedCellGroup = {
+  cells: DelayedCell[];
+  unlockAfterCorrectMarks: number;
+};
+
+export type SpotlightLine = {
+  axis: TargetAxis;
+  index: number;
+  requiredCorrectMarks: number;
+};
+
+export type HintGate = {
+  unlockAfterCorrectMarks: number;
+};
+
+export type QuietProgressTarget = {
+  axis: TargetAxis;
+  index: number;
+};
+
+export type NoEcho = {
+  axis: TargetAxis;
+};
+
+export type FactorCipher = {
+  axis: TargetAxis;
+  unlockAfterMatchedOppositeTargets: number;
 };
 
 export type CommitLine = {
@@ -82,6 +117,13 @@ export type Puzzle = {
   crossBlind?: CrossBlind;
   commitLine?: CommitLine;
   toolLock?: ToolLock;
+  sealedCells?: DelayedCellGroup;
+  spotlightLine?: SpotlightLine;
+  hintGate?: HintGate;
+  quietProgressTargets?: QuietProgressTarget[];
+  noEcho?: NoEcho;
+  cloakedCells?: DelayedCellGroup;
+  factorCipher?: FactorCipher;
   maxHearts: number;
   chapter: string;
   bandLabel: string;
@@ -184,6 +226,89 @@ type SolverCell = {
 };
 
 const GENERATOR_TRIES = 240;
+const LIMITED_HEART_DIFFICULTIES = new Set<DifficultyId>([
+  "hard",
+  "expert",
+  "mythic",
+]);
+const MODIFIER_CHANCES: Record<
+  ModifierId,
+  Partial<Record<DifficultyId, number>>
+> = {
+  lockedCells: {
+    easy: 0.72,
+    medium: 0.68,
+    hard: 0.58,
+  },
+  limitedErrors: {
+    hard: 1,
+    expert: 1,
+    mythic: 1,
+  },
+  foggedTargets: {
+    easy: 0.48,
+    medium: 0.55,
+    hard: 0.58,
+    expert: 0.52,
+    mythic: 0.48,
+  },
+  deepFog: {
+    hard: 0.5,
+    expert: 0.48,
+    mythic: 0.42,
+  },
+  commitLine: {
+    medium: 0.42,
+    hard: 0.44,
+    expert: 0.38,
+    mythic: 0.32,
+  },
+  toolLock: {
+    medium: 0.42,
+    hard: 0.42,
+    expert: 0.35,
+    mythic: 0.3,
+  },
+  crossBlind: {
+    expert: 0.34,
+    mythic: 0.3,
+  },
+  sealedCells: {
+    easy: 0.38,
+    medium: 0.42,
+    hard: 0.44,
+    expert: 0.38,
+    mythic: 0.32,
+  },
+  spotlightLine: {
+    easy: 0.36,
+    medium: 0.4,
+    hard: 0.38,
+    expert: 0.32,
+    mythic: 0.28,
+  },
+  hintGate: {
+    easy: 0.34,
+    medium: 0.38,
+    hard: 0.4,
+    expert: 0.34,
+    mythic: 0.3,
+  },
+  quietProgress: {
+    expert: 0.32,
+    mythic: 0.28,
+  },
+  noEcho: {
+    expert: 0.28,
+    mythic: 0.24,
+  },
+  cloakedCells: {
+    mythic: 0.22,
+  },
+  factorCipher: {
+    mythic: 0.16,
+  },
+};
 const subsetMemo = new Map<string, boolean>();
 
 function randomInt(min: number, max: number) {
@@ -723,9 +848,231 @@ function createHiddenTargets(
   return hiddenTargets;
 }
 
-export function createPuzzle(level: number, difficulty: DifficultyId): Puzzle {
+function createQuietProgressTargets(
+  size: number,
+  requestedCount: number,
+  hiddenTargets: HiddenTarget[] = [],
+  crossBlind?: CrossBlind,
+): QuietProgressTarget[] {
+  if (requestedCount <= 0) {
+    return [];
+  }
+
+  const targets = [
+    ...Array.from({ length: size }, (_, index) => ({
+      axis: "row" as const,
+      index,
+    })),
+    ...Array.from({ length: size }, (_, index) => ({
+      axis: "column" as const,
+      index,
+    })),
+  ];
+  const notFogged = (target: QuietProgressTarget) =>
+    !hiddenTargets.some(
+      (hiddenTarget) =>
+        hiddenTarget.axis === target.axis && hiddenTarget.index === target.index,
+    );
+  const visibleFirst = targets.filter(
+    (target) => notFogged(target) && crossBlind?.hiddenAxis !== target.axis,
+  );
+  const fallback = targets.filter(notFogged);
+
+  return shuffle(visibleFirst.length >= requestedCount ? visibleFirst : fallback).slice(
+    0,
+    requestedCount,
+  );
+}
+
+function createDelayedCellGroup(
+  size: number,
+  requestedCount: number,
+  unlockAfterCorrectMarks: number | undefined,
+  blockedCells: DelayedCell[] = [],
+): DelayedCellGroup | undefined {
+  if (requestedCount <= 0 || !unlockAfterCorrectMarks) {
+    return undefined;
+  }
+
+  const cells = shuffle(
+    createMatrix(size, (row, col) => ({ row, col }))
+      .flat()
+      .filter(
+        (cell) =>
+          !blockedCells.some(
+            (blocked) => blocked.row === cell.row && blocked.col === cell.col,
+          ),
+      ),
+  ).slice(0, requestedCount);
+
+  if (cells.length === 0) {
+    return undefined;
+  }
+
+  return {
+    cells,
+    unlockAfterCorrectMarks,
+  };
+}
+
+function createSpotlightLine(
+  size: number,
+  requiredCorrectMarks: number | undefined,
+): SpotlightLine | undefined {
+  if (!requiredCorrectMarks) {
+    return undefined;
+  }
+
+  return {
+    axis: sample(["row", "column"] as const),
+    index: randomInt(0, size - 1),
+    requiredCorrectMarks,
+  };
+}
+
+function createNoEcho(axis: LevelBlueprint["noEchoAxis"]): NoEcho | undefined {
+  if (!axis) {
+    return undefined;
+  }
+
+  return {
+    axis: axis === "random" ? sample(["row", "column"] as const) : axis,
+  };
+}
+
+function resolveLimitedHeartModifier(
+  blueprint: LevelBlueprint,
+  roll: number,
+): LevelBlueprint {
+  if (!LIMITED_HEART_DIFFICULTIES.has(blueprint.difficulty)) {
+    return blueprint;
+  }
+
+  const baseModifiers = blueprint.modifiers.filter(
+    (modifier) => modifier !== "limitedErrors",
+  );
+
+  if (roll < 0.4) {
+    return {
+      ...blueprint,
+      modifiers: baseModifiers,
+      maxHearts: 3,
+    };
+  }
+
+  if (roll < 0.8) {
+    return {
+      ...blueprint,
+      modifiers: ["limitedErrors", ...baseModifiers],
+      maxHearts: 2,
+    };
+  }
+
+  return {
+    ...blueprint,
+    modifiers: ["limitedErrors"],
+    maxHearts: 1,
+    lockedCells: undefined,
+    foggedTargets: undefined,
+    deepFogTargets: undefined,
+    toolLockMode: undefined,
+    commitLineCheckpoint: undefined,
+    crossBlindUnlockAfterMatchedVisibleLines: undefined,
+    sealedCells: undefined,
+    sealedCellsUnlockAfterCorrectMarks: undefined,
+    spotlightLineCorrectMarks: undefined,
+    hintGateUnlockAfterCorrectMarks: undefined,
+    quietProgressTargets: undefined,
+    noEchoAxis: undefined,
+    cloakedCells: undefined,
+    cloakedCellsUnlockAfterCorrectMarks: undefined,
+    factorCipherUnlockAfterMatchedOppositeTargets: undefined,
+  };
+}
+
+function getModifierRoll(
+  modifier: ModifierId,
+  rolls: Partial<Record<ModifierId, number>> | undefined,
+) {
+  return rolls?.[modifier] ?? Math.random();
+}
+
+function clearInactiveModifierMetadata(blueprint: LevelBlueprint): LevelBlueprint {
+  const active = new Set(blueprint.modifiers);
+
+  return {
+    ...blueprint,
+    lockedCells: active.has("lockedCells") ? blueprint.lockedCells : undefined,
+    foggedTargets: active.has("foggedTargets")
+      ? blueprint.foggedTargets
+      : undefined,
+    deepFogTargets: active.has("deepFog") ? blueprint.deepFogTargets : undefined,
+    toolLockMode: active.has("toolLock") ? blueprint.toolLockMode : undefined,
+    commitLineCheckpoint: active.has("commitLine")
+      ? blueprint.commitLineCheckpoint
+      : undefined,
+    crossBlindUnlockAfterMatchedVisibleLines: active.has("crossBlind")
+      ? blueprint.crossBlindUnlockAfterMatchedVisibleLines
+      : undefined,
+    sealedCells: active.has("sealedCells") ? blueprint.sealedCells : undefined,
+    sealedCellsUnlockAfterCorrectMarks: active.has("sealedCells")
+      ? blueprint.sealedCellsUnlockAfterCorrectMarks
+      : undefined,
+    spotlightLineCorrectMarks: active.has("spotlightLine")
+      ? blueprint.spotlightLineCorrectMarks
+      : undefined,
+    hintGateUnlockAfterCorrectMarks: active.has("hintGate")
+      ? blueprint.hintGateUnlockAfterCorrectMarks
+      : undefined,
+    quietProgressTargets: active.has("quietProgress")
+      ? blueprint.quietProgressTargets
+      : undefined,
+    noEchoAxis: active.has("noEcho") ? blueprint.noEchoAxis : undefined,
+    cloakedCells: active.has("cloakedCells") ? blueprint.cloakedCells : undefined,
+    cloakedCellsUnlockAfterCorrectMarks: active.has("cloakedCells")
+      ? blueprint.cloakedCellsUnlockAfterCorrectMarks
+      : undefined,
+    factorCipherUnlockAfterMatchedOppositeTargets: active.has("factorCipher")
+      ? blueprint.factorCipherUnlockAfterMatchedOppositeTargets
+      : undefined,
+  };
+}
+
+function resolveRandomModifierActivation(
+  blueprint: LevelBlueprint,
+  rolls?: Partial<Record<ModifierId, number>>,
+): LevelBlueprint {
+  const modifiers = blueprint.modifiers.filter((modifier) => {
+    if (modifier === "limitedErrors") {
+      return true;
+    }
+
+    const chance = MODIFIER_CHANCES[modifier][blueprint.difficulty] ?? 0;
+    return getModifierRoll(modifier, rolls) < chance;
+  });
+
+  return clearInactiveModifierMetadata({
+    ...blueprint,
+    modifiers,
+  });
+}
+
+export function createPuzzle(
+  level: number,
+  difficulty: DifficultyId,
+  options: {
+    limitedHeartRoll?: number;
+    modifierRolls?: Partial<Record<ModifierId, number>>;
+  } = {},
+): Puzzle {
   const config = DIFFICULTIES[difficulty];
-  const blueprint = getLevelBlueprint(difficulty, level);
+  const blueprint = resolveRandomModifierActivation(
+    resolveLimitedHeartModifier(
+      getLevelBlueprint(difficulty, level),
+      options.limitedHeartRoll ?? Math.random(),
+    ),
+    options.modifierRolls,
+  );
 
   for (let attempt = 0; attempt < GENERATOR_TRIES; attempt += 1) {
     const solution = buildSolution(config);
@@ -746,10 +1093,36 @@ export function createPuzzle(level: number, difficulty: DifficultyId): Puzzle {
       continue;
     }
 
-      return {
-        id: `${difficulty}-${level}-${Date.now()}-${attempt}`,
-        level,
-        difficulty,
+    const revealedMarks = createRevealedMarks(solution, blueprint.lockedCells ?? 0);
+    const hiddenTargets = createHiddenTargets(
+      config.size,
+      blueprint.foggedTargets ?? 0,
+      blueprint.deepFogTargets ?? 0,
+    );
+    const crossBlind = blueprint.crossBlindUnlockAfterMatchedVisibleLines
+      ? {
+          hiddenAxis: sample(["row", "column"] as const),
+          unlockAfterMatchedVisibleLines:
+            blueprint.crossBlindUnlockAfterMatchedVisibleLines,
+        }
+      : undefined;
+    const sealedCells = createDelayedCellGroup(
+      config.size,
+      blueprint.sealedCells ?? 0,
+      blueprint.sealedCellsUnlockAfterCorrectMarks,
+      revealedMarks,
+    );
+    const cloakedCells = createDelayedCellGroup(
+      config.size,
+      blueprint.cloakedCells ?? 0,
+      blueprint.cloakedCellsUnlockAfterCorrectMarks,
+      [...revealedMarks, ...(sealedCells?.cells ?? [])],
+    );
+
+    return {
+      id: `${difficulty}-${level}-${Date.now()}-${attempt}`,
+      level,
+      difficulty,
       size: config.size,
       board,
       solution,
@@ -759,39 +1132,54 @@ export function createPuzzle(level: number, difficulty: DifficultyId): Puzzle {
         id,
         ...MODIFIER_DETAILS[id],
       })),
-        missions: blueprint.missions.map((id) => ({
-          id,
-          ...MISSION_DETAILS[id],
-        })),
-        revealedMarks: createRevealedMarks(solution, blueprint.lockedCells ?? 0),
-        hiddenTargets: createHiddenTargets(
-          config.size,
-          blueprint.foggedTargets ?? 0,
-          blueprint.deepFogTargets ?? 0,
-        ),
-        crossBlind: blueprint.crossBlindUnlockAfterMatchedVisibleLines
-          ? {
-              hiddenAxis: sample(["row", "column"] as const),
-              unlockAfterMatchedVisibleLines:
-                blueprint.crossBlindUnlockAfterMatchedVisibleLines,
-            }
-          : undefined,
-        commitLine: blueprint.commitLineCheckpoint
-          ? {
-              axis: sample(["row", "column"] as const),
-              checkpoint: blueprint.commitLineCheckpoint,
-            }
-          : undefined,
-        toolLock: blueprint.toolLockMode
-          ? {
-              initialMode: blueprint.toolLockMode,
-              unlock: "visibleTargetMatched",
-            }
-          : undefined,
-        maxHearts: blueprint.maxHearts,
-        chapter: blueprint.chapter,
-        bandLabel: blueprint.bandLabel,
-      };
+      missions: blueprint.missions.map((id) => ({
+        id,
+        ...MISSION_DETAILS[id],
+      })),
+      revealedMarks,
+      hiddenTargets,
+      crossBlind,
+      commitLine: blueprint.commitLineCheckpoint
+        ? {
+            axis: sample(["row", "column"] as const),
+            checkpoint: blueprint.commitLineCheckpoint,
+          }
+        : undefined,
+      toolLock: blueprint.toolLockMode
+        ? {
+            initialMode: blueprint.toolLockMode,
+            unlock: "visibleTargetMatched",
+          }
+        : undefined,
+      sealedCells,
+      spotlightLine: createSpotlightLine(
+        config.size,
+        blueprint.spotlightLineCorrectMarks,
+      ),
+      hintGate: blueprint.hintGateUnlockAfterCorrectMarks
+        ? {
+            unlockAfterCorrectMarks: blueprint.hintGateUnlockAfterCorrectMarks,
+          }
+        : undefined,
+      quietProgressTargets: createQuietProgressTargets(
+        config.size,
+        blueprint.quietProgressTargets ?? 0,
+        hiddenTargets,
+        crossBlind,
+      ),
+      noEcho: createNoEcho(blueprint.noEchoAxis),
+      cloakedCells,
+      factorCipher: blueprint.factorCipherUnlockAfterMatchedOppositeTargets
+        ? {
+            axis: sample(["row", "column"] as const),
+            unlockAfterMatchedOppositeTargets:
+              blueprint.factorCipherUnlockAfterMatchedOppositeTargets,
+          }
+        : undefined,
+      maxHearts: blueprint.maxHearts,
+      chapter: blueprint.chapter,
+      bandLabel: blueprint.bandLabel,
+    };
   }
 
   throw new Error(`Unable to generate a unique ${difficulty} puzzle.`);
@@ -912,6 +1300,10 @@ export function getCorrectMarkCount(puzzle: Puzzle, marks: CellMark[][]) {
         continue;
       }
 
+      if (isCellLocked(puzzle, row, col)) {
+        continue;
+      }
+
       const expected = puzzle.solution[row][col] ? "selected" : "erased";
 
       if (mark === expected) {
@@ -921,6 +1313,83 @@ export function getCorrectMarkCount(puzzle: Puzzle, marks: CellMark[][]) {
   }
 
   return total;
+}
+
+function delayedGroupIncludes(
+  group: DelayedCellGroup | undefined,
+  row: number,
+  col: number,
+) {
+  return (
+    group?.cells.some((cell) => cell.row === row && cell.col === col) ?? false
+  );
+}
+
+function isDelayedGroupUnlocked(
+  puzzle: Puzzle,
+  marks: CellMark[][],
+  group: DelayedCellGroup | undefined,
+) {
+  if (!group) {
+    return true;
+  }
+
+  return getCorrectMarkCount(puzzle, marks) >= group.unlockAfterCorrectMarks;
+}
+
+export function isCellSealed(
+  puzzle: Puzzle,
+  marks: CellMark[][],
+  row: number,
+  col: number,
+) {
+  return (
+    delayedGroupIncludes(puzzle.sealedCells, row, col) &&
+    !isDelayedGroupUnlocked(puzzle, marks, puzzle.sealedCells)
+  );
+}
+
+export function isCellCloaked(
+  puzzle: Puzzle,
+  marks: CellMark[][],
+  row: number,
+  col: number,
+) {
+  return (
+    delayedGroupIncludes(puzzle.cloakedCells, row, col) &&
+    !isDelayedGroupUnlocked(puzzle, marks, puzzle.cloakedCells)
+  );
+}
+
+export function isCellDelayed(
+  puzzle: Puzzle,
+  marks: CellMark[][],
+  row: number,
+  col: number,
+) {
+  return (
+    isCellSealed(puzzle, marks, row, col) ||
+    isCellCloaked(puzzle, marks, row, col)
+  );
+}
+
+export function getDelayedCellProgress(
+  puzzle: Puzzle,
+  marks: CellMark[][],
+  group: DelayedCellGroup | undefined,
+) {
+  if (!group) {
+    return null;
+  }
+
+  return {
+    current: Math.min(
+      getCorrectMarkCount(puzzle, marks),
+      group.unlockAfterCorrectMarks,
+    ),
+    required: group.unlockAfterCorrectMarks,
+    unlocked: isDelayedGroupUnlocked(puzzle, marks, group),
+  };
 }
 
 export function getCommittedLineCorrectMarks(
@@ -962,6 +1431,130 @@ export function getCommittedLineCorrectMarks(
   }
 
   return total;
+}
+
+export function getSpotlightProgress(puzzle: Puzzle, marks: CellMark[][]) {
+  if (!puzzle.spotlightLine) {
+    return null;
+  }
+
+  const { axis, index, requiredCorrectMarks } = puzzle.spotlightLine;
+  const current = Math.min(
+    getCommittedLineCorrectMarks(puzzle, marks, axis, index),
+    requiredCorrectMarks,
+  );
+
+  return {
+    axis,
+    index,
+    current,
+    required: requiredCorrectMarks,
+    complete: current >= requiredCorrectMarks,
+  };
+}
+
+export function isCellBlockedBySpotlight(
+  puzzle: Puzzle,
+  marks: CellMark[][],
+  row: number,
+  col: number,
+) {
+  const progress = getSpotlightProgress(puzzle, marks);
+
+  if (!progress || progress.complete) {
+    return false;
+  }
+
+  return progress.axis === "row" ? progress.index !== row : progress.index !== col;
+}
+
+function isLineMatchedOrResolved(
+  puzzle: Puzzle,
+  marks: CellMark[][],
+  axis: TargetAxis,
+  index: number,
+) {
+  const resolved =
+    axis === "row" ? isRowResolved(puzzle, marks, index) : isColResolved(puzzle, marks, index);
+
+  return resolved || isLineTargetMatched(puzzle, marks, axis, index);
+}
+
+export function getNextNoEchoLine(
+  puzzle: Puzzle,
+  marks: CellMark[][],
+  current: ActiveCommitment | null,
+  row?: number,
+  col?: number,
+) {
+  if (!puzzle.noEcho) {
+    return null;
+  }
+
+  const released =
+    current &&
+    isLineMatchedOrResolved(puzzle, marks, current.axis, current.index);
+
+  if (released) {
+    return null;
+  }
+
+  if (row === undefined || col === undefined) {
+    return current;
+  }
+
+  const nextLine = {
+    axis: puzzle.noEcho.axis,
+    index: puzzle.noEcho.axis === "row" ? row : col,
+  };
+
+  return isLineMatchedOrResolved(puzzle, marks, nextLine.axis, nextLine.index)
+    ? null
+    : nextLine;
+}
+
+export function isCellBlockedByNoEcho(
+  noEchoLine: ActiveCommitment | null,
+  row: number,
+  col: number,
+) {
+  if (!noEchoLine) {
+    return false;
+  }
+
+  return noEchoLine.axis === "row"
+    ? noEchoLine.index === row
+    : noEchoLine.index === col;
+}
+
+export function isHintGateUnlocked(puzzle: Puzzle, marks: CellMark[][]) {
+  if (!puzzle.hintGate) {
+    return true;
+  }
+
+  return (
+    getCorrectMarkCount(puzzle, marks) >=
+    puzzle.hintGate.unlockAfterCorrectMarks
+  );
+}
+
+export function isProgressHidden(
+  puzzle: Puzzle,
+  marks: CellMark[][],
+  axis: TargetAxis,
+  index: number,
+) {
+  const quietModifierActive = puzzle.modifiers.some(
+    (modifier) => modifier.id === "quietProgress",
+  );
+  const quiet = puzzle.quietProgressTargets?.some(
+    (target) => target.axis === axis && target.index === index,
+  );
+
+  return (
+    (quietModifierActive || Boolean(quiet)) &&
+    !isLineMatchedOrResolved(puzzle, marks, axis, index)
+  );
 }
 
 export function hasVisibleMatchedTarget(puzzle: Puzzle, marks: CellMark[][]) {
@@ -1131,6 +1724,64 @@ export function getTargetConcealment(
   return null;
 }
 
+export function isTargetCiphered(
+  puzzle: Puzzle,
+  marks: CellMark[][],
+  axis: TargetAxis,
+) {
+  if (!puzzle.factorCipher || puzzle.factorCipher.axis !== axis) {
+    return false;
+  }
+
+  const oppositeAxis = axis === "row" ? "column" : "row";
+
+  return (
+    countMatchedTargetsOnAxis(puzzle, marks, oppositeAxis) <
+    puzzle.factorCipher.unlockAfterMatchedOppositeTargets
+  );
+}
+
+export function getPrimeFactors(value: number) {
+  const factors: number[] = [];
+  let remaining = value;
+  let divisor = 2;
+
+  while (remaining > 1 && divisor * divisor <= remaining) {
+    while (remaining % divisor === 0) {
+      factors.push(divisor);
+      remaining /= divisor;
+    }
+
+    divisor += divisor === 2 ? 1 : 2;
+  }
+
+  if (remaining > 1) {
+    factors.push(remaining);
+  }
+
+  return factors;
+}
+
+export function getFactorCipherProgress(puzzle: Puzzle, marks: CellMark[][]) {
+  if (!puzzle.factorCipher) {
+    return null;
+  }
+
+  const oppositeAxis = puzzle.factorCipher.axis === "row" ? "column" : "row";
+  const current = Math.min(
+    countMatchedTargetsOnAxis(puzzle, marks, oppositeAxis),
+    puzzle.factorCipher.unlockAfterMatchedOppositeTargets,
+  );
+
+  return {
+    axis: puzzle.factorCipher.axis,
+    oppositeAxis,
+    current,
+    required: puzzle.factorCipher.unlockAfterMatchedOppositeTargets,
+    unlocked: current >= puzzle.factorCipher.unlockAfterMatchedOppositeTargets,
+  };
+}
+
 export function getVisibleTarget(
   puzzle: Puzzle,
   marks: CellMark[][],
@@ -1165,6 +1816,10 @@ export function isPuzzleSolved(puzzle: Puzzle, marks: CellMark[][]) {
 export function revealHint(
   puzzle: Puzzle,
   marks: CellMark[][],
+  options: {
+    activeCommitment?: ActiveCommitment | null;
+    noEchoLine?: ActiveCommitment | null;
+  } = {},
 ): { row: number; col: number; mark: CellMark } | null {
   const candidates = shuffle(
     marks.flatMap((line, row) =>
@@ -1173,6 +1828,35 @@ export function revealHint(
         .filter(({ mark }) => mark === "hidden")
         .filter(({ row: candidateRow, col: candidateCol }) =>
           !isCellLocked(puzzle, candidateRow, candidateCol),
+        )
+        .filter(
+          ({ row: candidateRow, col: candidateCol }) =>
+            !isCellDelayed(puzzle, marks, candidateRow, candidateCol),
+        )
+        .filter(
+          ({ row: candidateRow, col: candidateCol }) =>
+            !isCellBlockedBySpotlight(
+              puzzle,
+              marks,
+              candidateRow,
+              candidateCol,
+            ),
+        )
+        .filter(
+          ({ row: candidateRow, col: candidateCol }) =>
+            !isCellBlockedByCommitment(
+              options.activeCommitment ?? null,
+              candidateRow,
+              candidateCol,
+            ),
+        )
+        .filter(
+          ({ row: candidateRow, col: candidateCol }) =>
+            !isCellBlockedByNoEcho(
+              options.noEchoLine ?? null,
+              candidateRow,
+              candidateCol,
+            ),
         ),
     ),
   );

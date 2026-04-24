@@ -7,7 +7,14 @@ export type ModifierId =
   | "deepFog"
   | "commitLine"
   | "toolLock"
-  | "crossBlind";
+  | "crossBlind"
+  | "sealedCells"
+  | "spotlightLine"
+  | "hintGate"
+  | "quietProgress"
+  | "noEcho"
+  | "cloakedCells"
+  | "factorCipher";
 
 export type MissionId = "flawless" | "noHints" | "rowRush";
 
@@ -20,6 +27,15 @@ export type LevelPreset = {
   toolLockMode?: "select";
   commitLineCheckpoint?: number;
   crossBlindUnlockAfterMatchedVisibleLines?: number;
+  sealedCells?: number;
+  sealedCellsUnlockAfterCorrectMarks?: number;
+  spotlightLineCorrectMarks?: number;
+  hintGateUnlockAfterCorrectMarks?: number;
+  quietProgressTargets?: number;
+  noEchoAxis?: "row" | "column" | "random";
+  cloakedCells?: number;
+  cloakedCellsUnlockAfterCorrectMarks?: number;
+  factorCipherUnlockAfterMatchedOppositeTargets?: number;
 };
 
 export type LevelBand = {
@@ -85,6 +101,48 @@ export const MODIFIER_DETAILS: Record<
     description:
       "All row or all column products begin concealed and only return after you match enough lines on the visible axis.",
   },
+  sealedCells: {
+    title: "Sealed Cells",
+    short: "Some cells open after progress.",
+    description:
+      "A few visible cells start disabled, then unlock after you place enough correct marks anywhere on the board.",
+  },
+  spotlightLine: {
+    title: "Spotlight Line",
+    short: "Start on the lit line.",
+    description:
+      "One row or column starts highlighted. Place enough correct marks there before marking elsewhere.",
+  },
+  hintGate: {
+    title: "Hint Gate",
+    short: "Hints unlock after progress.",
+    description:
+      "Hints are unavailable at the start and unlock once you make early correct marks.",
+  },
+  quietProgress: {
+    title: "Quiet Progress",
+    short: "Some progress ticks stay hidden.",
+    description:
+      "Target badges hide their small running product until that line is matched or resolved.",
+  },
+  noEcho: {
+    title: "No Echo",
+    short: "Do not repeat the same line.",
+    description:
+      "After a correct mark on the chosen axis, your next mark must be on a different line unless the prior line is matched or resolved.",
+  },
+  cloakedCells: {
+    title: "Cloaked Cells",
+    short: "Cells hide until progress.",
+    description:
+      "Several cells hide their values and stay disabled until enough correct marks are made anywhere on the board.",
+  },
+  factorCipher: {
+    title: "Factor Cipher",
+    short: "Targets show factors first.",
+    description:
+      "One target axis displays prime-factor chips instead of normal numbers until enough opposite-axis targets are matched.",
+  },
 };
 
 export const MISSION_DETAILS: Record<
@@ -105,11 +163,30 @@ export const MISSION_DETAILS: Record<
   },
 };
 
-export const CHAPTER_UNLOCKS: Partial<Record<DifficultyId, number>> = {
-  medium: 8,
-  hard: 9,
-  expert: 10,
-  mythic: 12,
+export type DifficultyUnlockRule = {
+  source: DifficultyId;
+  requiredClears: number;
+};
+
+export const CHAPTER_UNLOCKS: Partial<
+  Record<DifficultyId, DifficultyUnlockRule>
+> = {
+  medium: {
+    source: "easy",
+    requiredClears: 1,
+  },
+  hard: {
+    source: "easy",
+    requiredClears: 1,
+  },
+  expert: {
+    source: "hard",
+    requiredClears: 10,
+  },
+  mythic: {
+    source: "expert",
+    requiredClears: 10,
+  },
 };
 
 const PROGRESSION: Record<DifficultyId, LevelBand[]> = {
@@ -125,6 +202,17 @@ const PROGRESSION: Record<DifficultyId, LevelBand[]> = {
           modifiers: [],
           missions: ["flawless", "noHints"],
         },
+        {
+          modifiers: ["hintGate"],
+          missions: ["flawless", "noHints"],
+          hintGateUnlockAfterCorrectMarks: 1,
+        },
+        {
+          modifiers: ["sealedCells"],
+          missions: ["flawless", "noHints"],
+          sealedCells: 1,
+          sealedCellsUnlockAfterCorrectMarks: 1,
+        },
       ],
     },
     {
@@ -135,14 +223,21 @@ const PROGRESSION: Record<DifficultyId, LevelBand[]> = {
       maxHearts: 3,
       presetCycle: [
         {
-          modifiers: ["lockedCells"],
+          modifiers: ["lockedCells", "sealedCells"],
           missions: ["flawless", "noHints"],
           lockedCells: 2,
+          sealedCells: 1,
+          sealedCellsUnlockAfterCorrectMarks: 1,
         },
         {
           modifiers: ["lockedCells"],
           missions: ["flawless", "noHints"],
           lockedCells: 3,
+        },
+        {
+          modifiers: ["spotlightLine"],
+          missions: ["flawless", "noHints"],
+          spotlightLineCorrectMarks: 1,
         },
       ],
     },
@@ -154,20 +249,24 @@ const PROGRESSION: Record<DifficultyId, LevelBand[]> = {
       maxHearts: 3,
       presetCycle: [
         {
-          modifiers: ["foggedTargets"],
+          modifiers: ["foggedTargets", "hintGate"],
           missions: ["flawless", "noHints"],
           foggedTargets: 1,
+          hintGateUnlockAfterCorrectMarks: 1,
         },
         {
-          modifiers: ["lockedCells", "foggedTargets"],
+          modifiers: ["lockedCells", "foggedTargets", "sealedCells"],
           missions: ["flawless", "noHints"],
           lockedCells: 2,
           foggedTargets: 1,
+          sealedCells: 1,
+          sealedCellsUnlockAfterCorrectMarks: 1,
         },
         {
-          modifiers: ["foggedTargets"],
+          modifiers: ["foggedTargets", "spotlightLine"],
           missions: ["flawless", "noHints"],
           foggedTargets: 2,
+          spotlightLineCorrectMarks: 1,
         },
       ],
     },
@@ -181,14 +280,17 @@ const PROGRESSION: Record<DifficultyId, LevelBand[]> = {
       maxHearts: 3,
       presetCycle: [
         {
-          modifiers: ["lockedCells"],
+          modifiers: ["lockedCells", "sealedCells"],
           missions: ["flawless", "noHints"],
           lockedCells: 3,
+          sealedCells: 2,
+          sealedCellsUnlockAfterCorrectMarks: 2,
         },
         {
-          modifiers: ["foggedTargets"],
+          modifiers: ["foggedTargets", "hintGate"],
           missions: ["flawless", "noHints"],
           foggedTargets: 1,
+          hintGateUnlockAfterCorrectMarks: 2,
         },
         {
           modifiers: ["toolLock"],
@@ -196,9 +298,9 @@ const PROGRESSION: Record<DifficultyId, LevelBand[]> = {
           toolLockMode: "select",
         },
         {
-          modifiers: ["commitLine"],
+          modifiers: ["spotlightLine"],
           missions: ["flawless", "noHints"],
-          commitLineCheckpoint: 3,
+          spotlightLineCorrectMarks: 2,
         },
       ],
     },
@@ -210,16 +312,19 @@ const PROGRESSION: Record<DifficultyId, LevelBand[]> = {
       maxHearts: 3,
       presetCycle: [
         {
-          modifiers: ["lockedCells", "foggedTargets"],
+          modifiers: ["lockedCells", "foggedTargets", "hintGate"],
           missions: ["flawless", "noHints"],
           lockedCells: 2,
           foggedTargets: 1,
+          hintGateUnlockAfterCorrectMarks: 2,
         },
         {
-          modifiers: ["toolLock", "foggedTargets"],
+          modifiers: ["toolLock", "foggedTargets", "sealedCells"],
           missions: ["flawless", "rowRush"],
           foggedTargets: 1,
           toolLockMode: "select",
+          sealedCells: 2,
+          sealedCellsUnlockAfterCorrectMarks: 2,
         },
         {
           modifiers: ["commitLine", "lockedCells"],
@@ -233,6 +338,12 @@ const PROGRESSION: Record<DifficultyId, LevelBand[]> = {
           toolLockMode: "select",
           commitLineCheckpoint: 3,
         },
+        {
+          modifiers: ["spotlightLine", "foggedTargets"],
+          missions: ["flawless", "noHints"],
+          foggedTargets: 1,
+          spotlightLineCorrectMarks: 2,
+        },
       ],
     },
   ],
@@ -245,25 +356,29 @@ const PROGRESSION: Record<DifficultyId, LevelBand[]> = {
       maxHearts: 2,
       presetCycle: [
         {
-          modifiers: ["limitedErrors", "deepFog"],
+          modifiers: ["limitedErrors", "deepFog", "hintGate"],
           missions: ["flawless", "noHints"],
           deepFogTargets: 2,
+          hintGateUnlockAfterCorrectMarks: 3,
         },
         {
-          modifiers: ["limitedErrors", "commitLine"],
+          modifiers: ["limitedErrors", "spotlightLine"],
           missions: ["flawless", "noHints"],
-          commitLineCheckpoint: 3,
+          spotlightLineCorrectMarks: 2,
         },
         {
-          modifiers: ["limitedErrors", "toolLock"],
+          modifiers: ["limitedErrors", "toolLock", "sealedCells"],
           missions: ["flawless", "rowRush"],
           toolLockMode: "select",
+          sealedCells: 3,
+          sealedCellsUnlockAfterCorrectMarks: 3,
         },
         {
-          modifiers: ["limitedErrors", "lockedCells", "foggedTargets"],
+          modifiers: ["limitedErrors", "lockedCells", "foggedTargets", "hintGate"],
           missions: ["flawless", "noHints"],
           lockedCells: 3,
           foggedTargets: 1,
+          hintGateUnlockAfterCorrectMarks: 3,
         },
       ],
     },
@@ -275,10 +390,12 @@ const PROGRESSION: Record<DifficultyId, LevelBand[]> = {
       maxHearts: 2,
       presetCycle: [
         {
-          modifiers: ["limitedErrors", "deepFog", "lockedCells"],
+          modifiers: ["limitedErrors", "deepFog", "lockedCells", "sealedCells"],
           missions: ["flawless", "noHints"],
           deepFogTargets: 2,
           lockedCells: 4,
+          sealedCells: 3,
+          sealedCellsUnlockAfterCorrectMarks: 3,
         },
         {
           modifiers: ["limitedErrors", "deepFog", "commitLine"],
@@ -287,16 +404,25 @@ const PROGRESSION: Record<DifficultyId, LevelBand[]> = {
           commitLineCheckpoint: 3,
         },
         {
-          modifiers: ["limitedErrors", "toolLock", "foggedTargets"],
+          modifiers: ["limitedErrors", "toolLock", "foggedTargets", "hintGate"],
           missions: ["flawless", "rowRush"],
           foggedTargets: 1,
           toolLockMode: "select",
+          hintGateUnlockAfterCorrectMarks: 3,
         },
         {
           modifiers: ["limitedErrors", "commitLine", "foggedTargets"],
           missions: ["flawless", "noHints"],
           foggedTargets: 1,
           commitLineCheckpoint: 3,
+        },
+        {
+          modifiers: ["limitedErrors", "spotlightLine", "deepFog", "sealedCells"],
+          missions: ["flawless", "noHints"],
+          deepFogTargets: 2,
+          sealedCells: 3,
+          sealedCellsUnlockAfterCorrectMarks: 3,
+          spotlightLineCorrectMarks: 2,
         },
       ],
     },
@@ -310,28 +436,43 @@ const PROGRESSION: Record<DifficultyId, LevelBand[]> = {
       maxHearts: 1,
       presetCycle: [
         {
-          modifiers: ["limitedErrors", "deepFog", "commitLine"],
+          modifiers: ["limitedErrors", "deepFog", "commitLine", "quietProgress"],
           missions: ["flawless", "noHints"],
           deepFogTargets: 2,
           commitLineCheckpoint: 4,
+          quietProgressTargets: 2,
         },
         {
-          modifiers: ["limitedErrors", "crossBlind", "foggedTargets"],
+          modifiers: ["limitedErrors", "crossBlind", "foggedTargets", "hintGate", "quietProgress"],
           missions: ["flawless", "noHints"],
           foggedTargets: 1,
           crossBlindUnlockAfterMatchedVisibleLines: 2,
+          hintGateUnlockAfterCorrectMarks: 4,
+          quietProgressTargets: 2,
         },
         {
-          modifiers: ["limitedErrors", "deepFog", "crossBlind"],
+          modifiers: ["limitedErrors", "deepFog", "crossBlind", "noEcho", "sealedCells"],
           missions: ["flawless", "noHints"],
           deepFogTargets: 2,
           crossBlindUnlockAfterMatchedVisibleLines: 2,
+          noEchoAxis: "random",
+          sealedCells: 3,
+          sealedCellsUnlockAfterCorrectMarks: 4,
         },
         {
-          modifiers: ["limitedErrors", "toolLock", "commitLine"],
+          modifiers: ["limitedErrors", "toolLock", "commitLine", "quietProgress", "hintGate"],
           missions: ["flawless", "noHints"],
           toolLockMode: "select",
           commitLineCheckpoint: 4,
+          quietProgressTargets: 2,
+          hintGateUnlockAfterCorrectMarks: 4,
+        },
+        {
+          modifiers: ["limitedErrors", "spotlightLine", "deepFog", "quietProgress"],
+          missions: ["flawless", "noHints"],
+          deepFogTargets: 2,
+          spotlightLineCorrectMarks: 3,
+          quietProgressTargets: 2,
         },
       ],
     },
@@ -345,32 +486,43 @@ const PROGRESSION: Record<DifficultyId, LevelBand[]> = {
       maxHearts: 1,
       presetCycle: [
         {
-          modifiers: ["limitedErrors", "deepFog", "crossBlind", "commitLine"],
+          modifiers: ["limitedErrors", "deepFog", "crossBlind", "commitLine", "quietProgress", "factorCipher"],
           missions: ["flawless", "noHints"],
           deepFogTargets: 3,
           crossBlindUnlockAfterMatchedVisibleLines: 3,
           commitLineCheckpoint: 4,
+          quietProgressTargets: 3,
+          factorCipherUnlockAfterMatchedOppositeTargets: 3,
         },
         {
-          modifiers: ["limitedErrors", "lockedCells", "deepFog", "commitLine"],
+          modifiers: ["limitedErrors", "cloakedCells", "deepFog", "noEcho", "factorCipher"],
           missions: ["flawless", "noHints"],
-          lockedCells: 5,
+          cloakedCells: 4,
+          cloakedCellsUnlockAfterCorrectMarks: 5,
           deepFogTargets: 3,
-          commitLineCheckpoint: 4,
+          noEchoAxis: "random",
+          factorCipherUnlockAfterMatchedOppositeTargets: 3,
         },
         {
-          modifiers: ["limitedErrors", "lockedCells", "crossBlind", "foggedTargets"],
+          modifiers: ["limitedErrors", "sealedCells", "crossBlind", "foggedTargets", "hintGate", "quietProgress", "factorCipher"],
           missions: ["flawless", "noHints"],
-          lockedCells: 5,
+          sealedCells: 4,
+          sealedCellsUnlockAfterCorrectMarks: 5,
           foggedTargets: 2,
+          hintGateUnlockAfterCorrectMarks: 5,
+          quietProgressTargets: 3,
           crossBlindUnlockAfterMatchedVisibleLines: 3,
+          factorCipherUnlockAfterMatchedOppositeTargets: 3,
         },
         {
-          modifiers: ["limitedErrors", "lockedCells", "deepFog", "toolLock"],
+          modifiers: ["limitedErrors", "cloakedCells", "deepFog", "toolLock", "spotlightLine", "factorCipher"],
           missions: ["flawless", "rowRush"],
-          lockedCells: 5,
+          cloakedCells: 4,
+          cloakedCellsUnlockAfterCorrectMarks: 5,
           deepFogTargets: 3,
           toolLockMode: "select",
+          spotlightLineCorrectMarks: 3,
+          factorCipherUnlockAfterMatchedOppositeTargets: 3,
         },
       ],
     },
@@ -400,5 +552,9 @@ export function getLevelBlueprint(
 }
 
 export function getDifficultyUnlockRequirement(difficulty: DifficultyId) {
-  return CHAPTER_UNLOCKS[difficulty] ?? 0;
+  return CHAPTER_UNLOCKS[difficulty]?.requiredClears ?? 0;
+}
+
+export function getDifficultyUnlockSource(difficulty: DifficultyId) {
+  return CHAPTER_UNLOCKS[difficulty]?.source ?? null;
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import type { CSSProperties } from "react";
 import {
   CheckCircle2,
@@ -22,14 +22,26 @@ import {
   createPuzzle,
   DIFFICULTIES,
   DIFFICULTY_ORDER,
-  getNextCommitment,
   getColProgress,
+  getCorrectMarkCount,
+  getDelayedCellProgress,
+  getFactorCipherProgress,
+  getNextCommitment,
+  getNextNoEchoLine,
+  getPrimeFactors,
+  getSpotlightProgress,
   getTargetConcealment,
   getVisibleTarget,
   hasVisibleMatchedTarget,
+  isCellBlockedByNoEcho,
+  isCellBlockedBySpotlight,
   isCellBlockedByCommitment,
+  isCellDelayed,
   isColResolved,
+  isHintGateUnlocked,
   isPuzzleSolved,
+  isProgressHidden,
+  isTargetCiphered,
   revealHint,
   type ActiveCommitment,
   type CellMark,
@@ -47,6 +59,7 @@ import { RowFragment } from "./components/RowFragment";
 import { ToolButton } from "./components/ToolButton";
 import {
   getDifficultyUnlockRequirement,
+  getDifficultyUnlockSource,
   type MissionId,
   type ModifierId,
 } from "./progression";
@@ -88,6 +101,7 @@ type SessionState = {
   eraseUsedBeforeRowsResolved: boolean;
   toolLocked: boolean;
   activeCommitment: ActiveCommitment | null;
+  noEchoLine: ActiveCommitment | null;
 };
 
 type PersistedState = {
@@ -103,6 +117,8 @@ const STORAGE_KEY = "cross-multiply-state-v2";
 const LEGACY_STORAGE_KEY = "cross-multiply-state";
 const STARTING_HINTS = 3;
 const MAX_HINT_STOCK = 10;
+const CHEAT_TOGGLE_COUNT = 10;
+const CHEAT_TOGGLE_WINDOW_MS = 4000;
 
 function createProgressState(): ProgressState {
   return Object.fromEntries(
@@ -138,25 +154,67 @@ function buildSessionFromPuzzle(puzzle: Puzzle): SessionState {
     eraseUsedBeforeRowsResolved: false,
     toolLocked: Boolean(puzzle.toolLock),
     activeCommitment: null,
+    noEchoLine: null,
   };
 }
 
-function getNextDifficulty(difficulty: DifficultyId) {
-  const index = DIFFICULTY_ORDER.indexOf(difficulty);
-  return DIFFICULTY_ORDER[index + 1] ?? null;
-}
-
 function isDifficultyAvailable(progress: ProgressState, difficulty: DifficultyId) {
-  const index = DIFFICULTY_ORDER.indexOf(difficulty);
+  const unlockSource = getDifficultyUnlockSource(difficulty);
 
-  if (index <= 0) {
+  if (!unlockSource) {
     return true;
   }
 
-  const previous = DIFFICULTY_ORDER[index - 1];
   return (
-    progress[previous].clearedLevels >= getDifficultyUnlockRequirement(difficulty)
+    progress[unlockSource].clearedLevels >=
+    getDifficultyUnlockRequirement(difficulty)
   );
+}
+
+function getNextLockedDifficulty(progress: ProgressState) {
+  return (
+    DIFFICULTY_ORDER.find((id) => !isDifficultyAvailable(progress, id)) ?? null
+  );
+}
+
+function unlockAllDifficulties(progress: ProgressState): ProgressState {
+  const requiredClears = Object.fromEntries(
+    DIFFICULTY_ORDER.map((id) => [id, 0]),
+  ) as Record<DifficultyId, number>;
+
+  for (const difficulty of DIFFICULTY_ORDER) {
+    const source = getDifficultyUnlockSource(difficulty);
+
+    if (!source) {
+      continue;
+    }
+
+    requiredClears[source] = Math.max(
+      requiredClears[source],
+      getDifficultyUnlockRequirement(difficulty),
+    );
+  }
+
+  return Object.fromEntries(
+    DIFFICULTY_ORDER.map((id) => {
+      const clearedLevels = Math.max(
+        progress[id].clearedLevels,
+        requiredClears[id],
+      );
+
+      return [
+        id,
+        {
+          ...progress[id],
+          clearedLevels,
+          highestUnlockedLevel: Math.max(
+            progress[id].highestUnlockedLevel,
+            clearedLevels + 1,
+          ),
+        },
+      ];
+    }),
+  ) as ProgressState;
 }
 
 function loadPersistedState(): PersistedState {
@@ -321,28 +379,57 @@ function App() {
   const [persisted, setPersisted] = useState<PersistedState>(() =>
     loadPersistedState(),
   );
+  const [unlockDialogOpen, setUnlockDialogOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const themeToggleTimes = useRef<number[]>([]);
 
   const { difficulty, dismissedModifierTips, hintStock, progress, session, theme } = persisted;
   const puzzle = session.puzzle;
   const size = puzzle.size;
   const difficultyConfig = DIFFICULTIES[difficulty];
   const currentResult = getLevelResult(progress, difficulty, puzzle.level);
-  const nextDifficulty = getNextDifficulty(difficulty);
-  const nextUnlockRequirement = nextDifficulty
-    ? getDifficultyUnlockRequirement(nextDifficulty)
+  const nextLockedDifficulty = getNextLockedDifficulty(progress);
+  const nextUnlockSource = nextLockedDifficulty
+    ? getDifficultyUnlockSource(nextLockedDifficulty)
+    : null;
+  const nextUnlockRequirement = nextLockedDifficulty
+    ? getDifficultyUnlockRequirement(nextLockedDifficulty)
+    : 0;
+  const nextUnlockProgress = nextUnlockSource
+    ? progress[nextUnlockSource].clearedLevels
     : 0;
   const teachingModifierIds: ModifierId[] = [
     "deepFog",
     "crossBlind",
     "commitLine",
     "toolLock",
+    "sealedCells",
+    "spotlightLine",
+    "hintGate",
+    "quietProgress",
+    "noEcho",
+    "cloakedCells",
+    "factorCipher",
   ];
   const teachingModifiers = puzzle.modifiers.filter(
     (modifier) =>
       teachingModifierIds.includes(modifier.id) &&
       !dismissedModifierTips[modifier.id],
   );
+  const correctMarks = getCorrectMarkCount(puzzle, session.marks);
+  const sealedProgress = getDelayedCellProgress(
+    puzzle,
+    session.marks,
+    puzzle.sealedCells,
+  );
+  const cloakedProgress = getDelayedCellProgress(
+    puzzle,
+    session.marks,
+    puzzle.cloakedCells,
+  );
+  const spotlightProgress = getSpotlightProgress(puzzle, session.marks);
+  const factorCipherProgress = getFactorCipherProgress(puzzle, session.marks);
+  const hintGateUnlocked = isHintGateUnlocked(puzzle, session.marks);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -354,6 +441,31 @@ function App() {
       ...current,
       theme: nextTheme,
     }));
+  };
+
+  const toggleTheme = () => {
+    const nextTheme = theme === "dark" ? "light" : "dark";
+    const now = Date.now();
+    const recentToggles = [
+      ...themeToggleTimes.current.filter(
+        (time) => now - time <= CHEAT_TOGGLE_WINDOW_MS,
+      ),
+      now,
+    ];
+
+    if (recentToggles.length >= CHEAT_TOGGLE_COUNT) {
+      themeToggleTimes.current = [];
+      setUnlockDialogOpen(true);
+      setPersisted((current) => ({
+        ...current,
+        theme: nextTheme,
+        progress: unlockAllDifficulties(current.progress),
+      }));
+      return;
+    }
+
+    themeToggleTimes.current = recentToggles;
+    setTheme(nextTheme);
   };
 
   const dismissModifierTip = (modifierId: ModifierId) => {
@@ -525,6 +637,13 @@ function App() {
       row,
       col,
     );
+    const nextNoEchoLine = getNextNoEchoLine(
+      puzzle,
+      nextMarks,
+      session.noEchoLine,
+      row,
+      col,
+    );
 
     if (solved) {
       finalizeWin(nextMarks);
@@ -539,6 +658,7 @@ function App() {
         focusKey: `${row}-${col}-${Date.now()}`,
         toolLocked: nextToolLocked,
         activeCommitment: nextCommitment,
+        noEchoLine: nextNoEchoLine,
       },
     }));
   };
@@ -547,7 +667,10 @@ function App() {
     if (
       session.status !== "playing" ||
       session.marks[row][col] !== "hidden" ||
-      isCellBlockedByCommitment(session.activeCommitment, row, col)
+      isCellDelayed(puzzle, session.marks, row, col) ||
+      isCellBlockedBySpotlight(puzzle, session.marks, row, col) ||
+      isCellBlockedByCommitment(session.activeCommitment, row, col) ||
+      isCellBlockedByNoEcho(session.noEchoLine, row, col)
     ) {
       return;
     }
@@ -579,11 +702,14 @@ function App() {
   };
 
   const useHint = () => {
-    if (session.status !== "playing" || hintStock <= 0) {
+    if (session.status !== "playing" || hintStock <= 0 || !hintGateUnlocked) {
       return;
     }
 
-    const hint = revealHint(puzzle, session.marks);
+    const hint = revealHint(puzzle, session.marks, {
+      activeCommitment: session.activeCommitment,
+      noEchoLine: session.noEchoLine,
+    });
 
     if (!hint) {
       return;
@@ -597,6 +723,13 @@ function App() {
       puzzle,
       nextMarks,
       session.activeCommitment,
+    );
+    const nextNoEchoLine = getNextNoEchoLine(
+      puzzle,
+      nextMarks,
+      session.noEchoLine,
+      hint.row,
+      hint.col,
     );
 
     if (solved) {
@@ -619,6 +752,7 @@ function App() {
         focusKey: `${hint.row}-${hint.col}-hint-${Date.now()}`,
         toolLocked: nextToolLocked,
         activeCommitment: nextCommitment,
+        noEchoLine: nextNoEchoLine,
       },
     }));
   };
@@ -659,13 +793,21 @@ function App() {
                   <HapticButton
                     type="button"
                     onClick={useHint}
-                    disabled={hintStock <= 0 || session.status !== "playing"}
+                    disabled={
+                      hintStock <= 0 ||
+                      session.status !== "playing" ||
+                      !hintGateUnlocked
+                    }
                     className="relative rounded-full border border-[var(--panel-border)] bg-[var(--panel-muted)] p-3 text-[var(--text-primary)] transition hover:-translate-y-0.5 hover:border-[var(--accent)]/40 hover:bg-[var(--accent-soft)] disabled:cursor-not-allowed disabled:opacity-50"
-                    aria-label="Use hint"
+                    aria-label={
+                      hintGateUnlocked
+                        ? "Use hint"
+                        : `Hints unlock after ${puzzle.hintGate?.unlockAfterCorrectMarks ?? 0} correct marks`
+                    }
                   >
                     <Lightbulb className="h-5 w-5" strokeWidth={1.8} />
                     <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-[var(--accent)] px-1.5 py-0.5 text-[0.65rem] font-semibold leading-none text-white">
-                      {hintStock}
+                      {hintGateUnlocked ? hintStock : <Lock className="h-3 w-3" />}
                     </span>
                   </HapticButton>
                   <HapticButton
@@ -678,9 +820,7 @@ function App() {
                   </HapticButton>
                   <HapticButton
                     type="button"
-                    onClick={() =>
-                      setTheme(theme === "dark" ? "light" : "dark")
-                    }
+                    onClick={toggleTheme}
                     className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-muted)] p-3 text-[var(--text-primary)] transition hover:-translate-y-0.5 hover:border-[var(--accent)]/40 hover:bg-[var(--accent-soft)]"
                     aria-label="Toggle theme"
                   >
@@ -760,6 +900,35 @@ function App() {
                 <div className="rounded-[1.75rem] border border-[var(--panel-border)] bg-[var(--board-shell)] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] sm:p-4">
                   <div className="mb-4 flex flex-wrap items-center gap-3">
                     <Hearts hearts={session.hearts} maxHearts={session.maxHearts} />
+                    <div className="inline-flex items-center gap-2 rounded-full border border-[var(--panel-border)] bg-[var(--panel-muted)] px-3 py-1.5 text-xs uppercase tracking-[0.24em] text-[var(--text-secondary)]">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      Correct {correctMarks}
+                    </div>
+                    {puzzle.hintGate && !hintGateUnlocked && (
+                      <div className="inline-flex items-center gap-2 rounded-full border border-amber-300/18 bg-amber-400/10 px-3 py-1.5 text-xs uppercase tracking-[0.24em] text-amber-200">
+                        <Lightbulb className="h-3.5 w-3.5" />
+                        Hints {correctMarks}/{puzzle.hintGate.unlockAfterCorrectMarks}
+                      </div>
+                    )}
+                    {sealedProgress && !sealedProgress.unlocked && (
+                      <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/18 bg-cyan-400/10 px-3 py-1.5 text-xs uppercase tracking-[0.24em] text-cyan-100">
+                        <Lock className="h-3.5 w-3.5" />
+                        Seals {sealedProgress.current}/{sealedProgress.required}
+                      </div>
+                    )}
+                    {cloakedProgress && !cloakedProgress.unlocked && (
+                      <div className="inline-flex items-center gap-2 rounded-full border border-fuchsia-300/18 bg-fuchsia-400/10 px-3 py-1.5 text-xs uppercase tracking-[0.24em] text-fuchsia-100">
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Cloaks {cloakedProgress.current}/{cloakedProgress.required}
+                      </div>
+                    )}
+                    {spotlightProgress && !spotlightProgress.complete && (
+                      <div className="inline-flex items-center gap-2 rounded-full border border-lime-300/18 bg-lime-400/10 px-3 py-1.5 text-xs uppercase tracking-[0.24em] text-lime-100">
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Spotlight {spotlightProgress.axis} {spotlightProgress.index + 1}:{" "}
+                        {spotlightProgress.current}/{spotlightProgress.required}
+                      </div>
+                    )}
                     {session.toolLocked && (
                       <div className="inline-flex items-center gap-2 rounded-full border border-amber-300/18 bg-amber-400/10 px-3 py-1.5 text-xs uppercase tracking-[0.24em] text-amber-200">
                         <ShieldAlert className="h-3.5 w-3.5" />
@@ -772,6 +941,12 @@ function App() {
                         Locked to {session.activeCommitment.axis} {session.activeCommitment.index + 1}
                       </div>
                     )}
+                    {session.noEchoLine && (
+                      <div className="inline-flex items-center gap-2 rounded-full border border-rose-300/18 bg-rose-400/10 px-3 py-1.5 text-xs uppercase tracking-[0.24em] text-rose-100">
+                        <ShieldAlert className="h-3.5 w-3.5" />
+                        Next off {session.noEchoLine.axis} {session.noEchoLine.index + 1}
+                      </div>
+                    )}
                     {puzzle.crossBlind && (
                       <div className="inline-flex items-center gap-2 rounded-full border border-violet-300/18 bg-violet-400/10 px-3 py-1.5 text-xs uppercase tracking-[0.24em] text-violet-100">
                         <Sparkles className="h-3.5 w-3.5" />
@@ -782,6 +957,12 @@ function App() {
                           puzzle.crossBlind.hiddenAxis === "row" ? "column" : "row",
                         )}
                         /{puzzle.crossBlind.unlockAfterMatchedVisibleLines}
+                      </div>
+                    )}
+                    {factorCipherProgress && !factorCipherProgress.unlocked && (
+                      <div className="inline-flex items-center gap-2 rounded-full border border-teal-300/18 bg-teal-400/10 px-3 py-1.5 text-xs uppercase tracking-[0.24em] text-teal-100">
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Cipher {factorCipherProgress.current}/{factorCipherProgress.required}
                       </div>
                     )}
                   </div>
@@ -801,16 +982,31 @@ function App() {
                           session.marks,
                           col,
                         );
+                        const target = getVisibleTarget(
+                          puzzle,
+                          session.marks,
+                          "column",
+                          col,
+                        );
+                        const ciphered =
+                          target !== null &&
+                          isTargetCiphered(puzzle, session.marks, "column");
                         return (
                           <RowFragment.ColumnTarget
                             key={`col-${col}`}
-                            target={getVisibleTarget(
+                            target={target}
+                            concealment={getTargetConcealment(
                               puzzle,
                               session.marks,
                               "column",
                               col,
                             )}
-                            concealment={getTargetConcealment(
+                            factorChips={
+                              ciphered && target !== null
+                                ? getPrimeFactors(target)
+                                : undefined
+                            }
+                            progressHidden={isProgressHidden(
                               puzzle,
                               session.marks,
                               "column",
@@ -830,6 +1026,7 @@ function App() {
                           marks={session.marks}
                           focusKey={session.focusKey}
                           activeCommitment={session.activeCommitment}
+                          noEchoLine={session.noEchoLine}
                           onPress={handleCellPress}
                         />
                       ))}
@@ -993,15 +1190,18 @@ function App() {
                           </div>
                         </div>
                         <div className="text-right text-sm text-[var(--text-secondary)]">
-                          {nextDifficulty ? (
+                          {nextLockedDifficulty && nextUnlockSource ? (
                             <>
-                              <div>Next chapter: {DIFFICULTIES[nextDifficulty].label}</div>
+                              <div>
+                                Next chapter: {DIFFICULTIES[nextLockedDifficulty].label}
+                              </div>
                               <div>
                                 {Math.min(
-                                  progress[difficulty].clearedLevels,
+                                  nextUnlockProgress,
                                   nextUnlockRequirement,
                                 )}
-                                /{nextUnlockRequirement} clears
+                                /{nextUnlockRequirement}{" "}
+                                {DIFFICULTIES[nextUnlockSource].label.toLowerCase()} clears
                               </div>
                             </>
                           ) : (
@@ -1009,15 +1209,14 @@ function App() {
                           )}
                         </div>
                       </div>
-                      {nextDifficulty && (
+                      {nextLockedDifficulty && (
                         <div className="mt-4 h-2 rounded-full bg-black/15">
                           <div
                             className="h-full rounded-full bg-[var(--accent)]"
                             style={{
                               width: `${Math.min(
                                 100,
-                                (progress[difficulty].clearedLevels /
-                                  nextUnlockRequirement) *
+                                (nextUnlockProgress / nextUnlockRequirement) *
                                   100,
                               )}%`,
                             }}
@@ -1072,6 +1271,29 @@ function App() {
                   New board
                 </HapticButton>
               </div>
+            </div>
+          </div>
+        )}
+
+        {unlockDialogOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-sm rounded-[2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] p-6 text-center shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-amber-300/25 bg-amber-400/12 text-amber-300">
+                <Sparkles className="h-6 w-6" strokeWidth={1.8} />
+              </div>
+              <h2 className="mt-4 text-2xl font-semibold text-[var(--text-primary)]">
+                All chapters unlocked
+              </h2>
+              <p className="mt-2 text-sm text-[var(--text-secondary)]">
+                The hidden gate opened. Medium, Hard, Expert, and Mythic are ready.
+              </p>
+              <HapticButton
+                type="button"
+                onClick={() => setUnlockDialogOpen(false)}
+                className="mt-6 w-full rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(247,122,168,0.3)] transition hover:-translate-y-0.5"
+              >
+                Nice
+              </HapticButton>
             </div>
           </div>
         )}

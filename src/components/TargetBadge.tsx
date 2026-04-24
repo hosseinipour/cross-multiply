@@ -2,16 +2,21 @@ const formatter = new Intl.NumberFormat();
 
 export function TargetBadge({
   concealment = null,
+  factorChips,
+  progressHidden = false,
   target,
   progress,
   resolved,
 }: {
   target: number | null;
   concealment?: "blind" | "deepFog" | "fog" | null;
+  factorChips?: number[];
+  progressHidden?: boolean;
   progress: number;
   resolved: boolean;
 }) {
   const hidden = target === null;
+  const ciphered = !hidden && Boolean(factorChips?.length);
   const hiddenLabel = concealment === "blind" ? "Blind" : "Fog";
 
   return (
@@ -28,12 +33,27 @@ export function TargetBadge({
     >
       {!resolved && (
         <>
-          <span className="font-['Trebuchet_MS'] font-bold text-[clamp(0.8rem,1.8vw,1.4rem)] sm:text-[clamp(0.9rem,2vw,1.4rem)]">
-            {hidden ? "?" : formatter.format(target)}
+          <span
+            className={`font-['Trebuchet_MS'] font-bold ${
+              ciphered
+                ? "max-w-full px-1 text-[clamp(0.5rem,1.4vw,0.9rem)] leading-tight"
+                : "text-[clamp(0.8rem,1.8vw,1.4rem)] sm:text-[clamp(0.9rem,2vw,1.4rem)]"
+            }`}
+          >
+            {hidden
+              ? "?"
+              : ciphered
+                ? factorChips?.join(" x ")
+                : formatter.format(target)}
           </span>
-          {!hidden && progress > 1 && (
+          {!hidden && progress > 1 && !progressHidden && (
             <span className="absolute right-1 top-1 text-[0.55rem] font-semibold leading-none text-[var(--accent)] sm:right-1.5 sm:top-1.5 sm:text-[0.6rem]">
               {formatter.format(progress)}
+            </span>
+          )}
+          {ciphered && (
+            <span className="absolute bottom-1 left-1/2 -translate-x-1/2 text-[0.48rem] uppercase tracking-[0.18em] text-teal-200/75">
+              Factors
             </span>
           )}
           {hidden && (
