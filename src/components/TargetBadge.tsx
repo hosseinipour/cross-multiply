@@ -1,15 +1,18 @@
 const formatter = new Intl.NumberFormat();
 
 export function TargetBadge({
+  concealment = null,
   target,
   progress,
   resolved,
 }: {
   target: number | null;
+  concealment?: "blind" | "deepFog" | "fog" | null;
   progress: number;
   resolved: boolean;
 }) {
   const hidden = target === null;
+  const hiddenLabel = concealment === "blind" ? "Blind" : "Fog";
 
   return (
     <div
@@ -17,7 +20,9 @@ export function TargetBadge({
         resolved
           ? "border-transparent bg-transparent text-transparent"
           : hidden
-            ? "border-dashed border-[var(--target-border)] bg-[var(--panel-muted)]/70 text-[var(--text-muted)]"
+            ? concealment === "blind"
+              ? "border-dashed border-violet-300/35 bg-violet-400/10 text-violet-100"
+              : "border-dashed border-[var(--target-border)] bg-[var(--panel-muted)]/70 text-[var(--text-muted)]"
             : "border-[var(--target-border)] bg-[var(--target-bg)] text-[var(--text-primary)] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
       }`}
     >
@@ -32,8 +37,12 @@ export function TargetBadge({
             </span>
           )}
           {hidden && (
-            <span className="absolute bottom-1 left-1/2 -translate-x-1/2 text-[0.5rem] uppercase tracking-[0.2em] text-[var(--text-faint)]">
-              Fog
+            <span
+              className={`absolute bottom-1 left-1/2 -translate-x-1/2 text-[0.5rem] uppercase tracking-[0.2em] ${
+                concealment === "blind" ? "text-violet-100/65" : "text-[var(--text-faint)]"
+              }`}
+            >
+              {hiddenLabel}
             </span>
           )}
         </>

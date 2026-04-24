@@ -12,20 +12,26 @@ import {
   Sparkles,
   Star,
   Sun,
+  X,
 } from "lucide-react";
 import {
   applyRevealedMarks,
   areAllRowTargetsMet,
+  countMatchedTargetsOnAxis,
   createEmptyMarks,
   createPuzzle,
   DIFFICULTIES,
   DIFFICULTY_ORDER,
+  getNextCommitment,
   getColProgress,
-  getCorrectMarkCount,
+  getTargetConcealment,
   getVisibleTarget,
+  hasVisibleMatchedTarget,
+  isCellBlockedByCommitment,
   isColResolved,
   isPuzzleSolved,
   revealHint,
+  type ActiveCommitment,
   type CellMark,
   type DifficultyId,
   type Puzzle,
@@ -81,6 +87,7 @@ type SessionState = {
   mistakes: number;
   eraseUsedBeforeRowsResolved: boolean;
   toolLocked: boolean;
+  activeCommitment: ActiveCommitment | null;
 };
 
 type PersistedState = {
@@ -117,22 +124,20 @@ function buildSession(difficulty: DifficultyId, level: number): SessionState {
 
 function buildSessionFromPuzzle(puzzle: Puzzle): SessionState {
   const marks = applyRevealedMarks(createEmptyMarks(puzzle.size), puzzle.revealedMarks);
-  const initialToolLock =
-    Boolean(puzzle.initialMode && puzzle.toolUnlockCorrectMarks) &&
-    getCorrectMarkCount(puzzle, marks) < (puzzle.toolUnlockCorrectMarks ?? 0);
 
   return {
     puzzle,
     marks,
     hearts: puzzle.maxHearts,
     maxHearts: puzzle.maxHearts,
-    mode: puzzle.initialMode ?? "select",
+    mode: puzzle.toolLock?.initialMode ?? "select",
     status: "playing",
     focusKey: null,
     hintsUsed: 0,
     mistakes: 0,
     eraseUsedBeforeRowsResolved: false,
-    toolLocked: initialToolLock,
+    toolLocked: Boolean(puzzle.toolLock),
+    activeCommitment: null,
   };
 }
 
@@ -238,7 +243,7 @@ function getLevelResult(progress: ProgressState, difficulty: DifficultyId, level
   return progress[difficulty].levelResults[String(level)] ?? null;
 }
 
-function computeStars(puzzle: Puzzle, run: RunSummary) {
+function computeStars(_puzzle: Puzzle, run: RunSummary) {
   let stars = 1;
 
   if (
@@ -249,16 +254,6 @@ function computeStars(puzzle: Puzzle, run: RunSummary) {
     stars = 3;
   } else if (run.heartsLeft > 0 && run.mistakes <= 1 && run.hintsUsed <= 1) {
     stars = 2;
-  }
-
-  const hasHintTax = puzzle.modifiers.some(
-    (modifier) => modifier.id === "comboHintPenalty",
-  );
-
-  if (hasHintTax && run.hintsUsed >= 2) {
-    stars = Math.min(stars, 1);
-  } else if (hasHintTax && run.hintsUsed === 1) {
-    stars = Math.min(stars, 2);
   }
 
   return stars;
@@ -315,11 +310,11 @@ function getToolLockState(
   marks: CellMark[][],
   current: boolean,
 ) {
-  if (!current || !puzzle.toolUnlockCorrectMarks) {
+  if (!current || !puzzle.toolLock) {
     return false;
   }
 
-  return getCorrectMarkCount(puzzle, marks) < puzzle.toolUnlockCorrectMarks;
+  return !hasVisibleMatchedTarget(puzzle, marks);
 }
 
 function App() {
@@ -328,7 +323,7 @@ function App() {
   );
   const [isPending, startTransition] = useTransition();
 
-  const { difficulty, hintStock, progress, session, theme } = persisted;
+  const { difficulty, dismissedModifierTips, hintStock, progress, session, theme } = persisted;
   const puzzle = session.puzzle;
   const size = puzzle.size;
   const difficultyConfig = DIFFICULTIES[difficulty];
@@ -337,6 +332,17 @@ function App() {
   const nextUnlockRequirement = nextDifficulty
     ? getDifficultyUnlockRequirement(nextDifficulty)
     : 0;
+  const teachingModifierIds: ModifierId[] = [
+    "deepFog",
+    "crossBlind",
+    "commitLine",
+    "toolLock",
+  ];
+  const teachingModifiers = puzzle.modifiers.filter(
+    (modifier) =>
+      teachingModifierIds.includes(modifier.id) &&
+      !dismissedModifierTips[modifier.id],
+  );
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -347,6 +353,16 @@ function App() {
     setPersisted((current) => ({
       ...current,
       theme: nextTheme,
+    }));
+  };
+
+  const dismissModifierTip = (modifierId: ModifierId) => {
+    setPersisted((current) => ({
+      ...current,
+      dismissedModifierTips: {
+        ...current.dismissedModifierTips,
+        [modifierId]: true,
+      },
     }));
   };
 
@@ -502,6 +518,13 @@ function App() {
     nextMarks[row][col] = mark;
     const solved = isPuzzleSolved(puzzle, nextMarks);
     const nextToolLocked = getToolLockState(puzzle, nextMarks, session.toolLocked);
+    const nextCommitment = getNextCommitment(
+      puzzle,
+      nextMarks,
+      session.activeCommitment,
+      row,
+      col,
+    );
 
     if (solved) {
       finalizeWin(nextMarks);
@@ -515,12 +538,17 @@ function App() {
         marks: nextMarks,
         focusKey: `${row}-${col}-${Date.now()}`,
         toolLocked: nextToolLocked,
+        activeCommitment: nextCommitment,
       },
     }));
   };
 
   const handleCellPress = (row: number, col: number) => {
-    if (session.status !== "playing" || session.marks[row][col] !== "hidden") {
+    if (
+      session.status !== "playing" ||
+      session.marks[row][col] !== "hidden" ||
+      isCellBlockedByCommitment(session.activeCommitment, row, col)
+    ) {
       return;
     }
 
@@ -565,6 +593,11 @@ function App() {
     nextMarks[hint.row][hint.col] = hint.mark;
     const solved = isPuzzleSolved(puzzle, nextMarks);
     const nextToolLocked = getToolLockState(puzzle, nextMarks, session.toolLocked);
+    const nextCommitment = getNextCommitment(
+      puzzle,
+      nextMarks,
+      session.activeCommitment,
+    );
 
     if (solved) {
       finalizeWin(nextMarks, {
@@ -585,6 +618,7 @@ function App() {
         hintsUsed: current.session.hintsUsed + 1,
         focusKey: `${hint.row}-${hint.col}-hint-${Date.now()}`,
         toolLocked: nextToolLocked,
+        activeCommitment: nextCommitment,
       },
     }));
   };
@@ -729,7 +763,25 @@ function App() {
                     {session.toolLocked && (
                       <div className="inline-flex items-center gap-2 rounded-full border border-amber-300/18 bg-amber-400/10 px-3 py-1.5 text-xs uppercase tracking-[0.24em] text-amber-200">
                         <ShieldAlert className="h-3.5 w-3.5" />
-                        Unlock second tool after {puzzle.toolUnlockCorrectMarks} correct marks
+                        Start in select. Switch unlocks after matching a visible target
+                      </div>
+                    )}
+                    {session.activeCommitment && (
+                      <div className="inline-flex items-center gap-2 rounded-full border border-sky-300/18 bg-sky-400/10 px-3 py-1.5 text-xs uppercase tracking-[0.24em] text-sky-100">
+                        <Lock className="h-3.5 w-3.5" />
+                        Locked to {session.activeCommitment.axis} {session.activeCommitment.index + 1}
+                      </div>
+                    )}
+                    {puzzle.crossBlind && (
+                      <div className="inline-flex items-center gap-2 rounded-full border border-violet-300/18 bg-violet-400/10 px-3 py-1.5 text-xs uppercase tracking-[0.24em] text-violet-100">
+                        <Sparkles className="h-3.5 w-3.5" />
+                        {puzzle.crossBlind.hiddenAxis} axis blind:{" "}
+                        {countMatchedTargetsOnAxis(
+                          puzzle,
+                          session.marks,
+                          puzzle.crossBlind.hiddenAxis === "row" ? "column" : "row",
+                        )}
+                        /{puzzle.crossBlind.unlockAfterMatchedVisibleLines}
                       </div>
                     )}
                   </div>
@@ -758,6 +810,12 @@ function App() {
                               "column",
                               col,
                             )}
+                            concealment={getTargetConcealment(
+                              puzzle,
+                              session.marks,
+                              "column",
+                              col,
+                            )}
                             progress={progressValue}
                             resolved={resolved}
                           />
@@ -771,6 +829,7 @@ function App() {
                           puzzle={puzzle}
                           marks={session.marks}
                           focusKey={session.focusKey}
+                          activeCommitment={session.activeCommitment}
                           onPress={handleCellPress}
                         />
                       ))}
@@ -828,6 +887,34 @@ function App() {
                           Classic training board. No extra rules yet.
                         </div>
                       )}
+                      {teachingModifiers.map((modifier) => (
+                        <div
+                          key={`tip-${modifier.id}`}
+                          className="rounded-[1.2rem] border border-sky-300/20 bg-sky-400/10 px-4 py-3"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="text-xs uppercase tracking-[0.24em] text-sky-100/80">
+                                New rule
+                              </div>
+                              <h2 className="mt-1 text-sm font-semibold text-sky-50">
+                                {modifier.title}
+                              </h2>
+                            </div>
+                            <HapticButton
+                              type="button"
+                              onClick={() => dismissModifierTip(modifier.id)}
+                              className="rounded-full border border-sky-200/15 bg-white/5 p-1 text-sky-50/70 transition hover:bg-white/10"
+                              aria-label={`Dismiss ${modifier.title} tip`}
+                            >
+                              <X className="h-4 w-4" strokeWidth={1.8} />
+                            </HapticButton>
+                          </div>
+                          <p className="mt-2 text-sm text-sky-50/80">
+                            {modifier.description}
+                          </p>
+                        </div>
+                      ))}
                       {puzzle.modifiers.map((modifier) => (
                         <div
                           key={modifier.id}
@@ -1016,28 +1103,28 @@ function App() {
                     />
                   ))}
                 </div>
-                <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                  <div className="rounded-[1.2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] px-4 py-3 text-center">
-                    <div className="text-xs uppercase tracking-[0.26em] text-[var(--text-muted)]">
+                <div className="mt-5 grid grid-cols-3 gap-2 sm:gap-3">
+                  <div className="rounded-[1.2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] px-2 py-2.5 text-center sm:px-4 sm:py-3">
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-muted)] sm:text-xs sm:tracking-[0.26em]">
                       Hearts
                     </div>
-                    <div className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">
+                    <div className="mt-1.5 text-xl font-semibold text-[var(--text-primary)] sm:mt-2 sm:text-2xl">
                       {session.hearts}/{session.maxHearts}
                     </div>
                   </div>
-                  <div className="rounded-[1.2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] px-4 py-3 text-center">
-                    <div className="text-xs uppercase tracking-[0.26em] text-[var(--text-muted)]">
+                  <div className="rounded-[1.2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] px-2 py-2.5 text-center sm:px-4 sm:py-3">
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-muted)] sm:text-xs sm:tracking-[0.26em]">
                       Hints
                     </div>
-                    <div className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">
+                    <div className="mt-1.5 text-xl font-semibold text-[var(--text-primary)] sm:mt-2 sm:text-2xl">
                       {session.hintsUsed}
                     </div>
                   </div>
-                  <div className="rounded-[1.2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] px-4 py-3 text-center">
-                    <div className="text-xs uppercase tracking-[0.26em] text-[var(--text-muted)]">
+                  <div className="rounded-[1.2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] px-2 py-2.5 text-center sm:px-4 sm:py-3">
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-muted)] sm:text-xs sm:tracking-[0.26em]">
                       Mistakes
                     </div>
-                    <div className="mt-2 text-2xl font-semibold text-[var(--text-primary)]">
+                    <div className="mt-1.5 text-xl font-semibold text-[var(--text-primary)] sm:mt-2 sm:text-2xl">
                       {session.mistakes}
                     </div>
                   </div>

@@ -4,10 +4,23 @@ export type ModifierId =
   | "lockedCells"
   | "limitedErrors"
   | "foggedTargets"
-  | "oneWayTools"
-  | "comboHintPenalty";
+  | "deepFog"
+  | "commitLine"
+  | "toolLock"
+  | "crossBlind";
 
 export type MissionId = "flawless" | "noHints" | "rowRush";
+
+export type LevelPreset = {
+  modifiers: ModifierId[];
+  missions: MissionId[];
+  lockedCells?: number;
+  foggedTargets?: number;
+  deepFogTargets?: number;
+  toolLockMode?: "select";
+  commitLineCheckpoint?: number;
+  crossBlindUnlockAfterMatchedVisibleLines?: number;
+};
 
 export type LevelBand = {
   from: number;
@@ -15,17 +28,15 @@ export type LevelBand = {
   chapter: string;
   bandLabel: string;
   maxHearts: number;
-  modifiers: ModifierId[];
-  missions: MissionId[];
-  lockMode?: "select" | "erase";
-  toolUnlockCorrectMarks?: number;
-  lockedCells?: number;
-  hiddenTargets?: number;
+  presetCycle: LevelPreset[];
 };
 
-export type LevelBlueprint = LevelBand & {
+export type LevelBlueprint = LevelPreset & {
   difficulty: DifficultyId;
   level: number;
+  chapter: string;
+  bandLabel: string;
+  maxHearts: number;
 };
 
 export const MODIFIER_DETAILS: Record<
@@ -36,31 +47,43 @@ export const MODIFIER_DETAILS: Record<
     title: "Locked Cells",
     short: "Prefilled marks stay fixed.",
     description:
-      "A few cells begin already confirmed. Use them as anchors, but you cannot change them.",
+      "A few cells begin already confirmed. They anchor the solve, but you cannot change them.",
   },
   limitedErrors: {
     title: "Limited Errors",
     short: "Mistakes cost more.",
     description:
-      "This chapter trims your heart budget, so each misread matters more than usual.",
+      "This chapter trims your heart budget, so each wrong read carries much more pressure.",
   },
   foggedTargets: {
     title: "Fogged Targets",
     short: "Some clues stay hidden.",
     description:
-      "One or more row or column targets are concealed until you commit enough marks on that line.",
+      "A few row or column products stay concealed until you commit enough marks on that exact line.",
   },
-  oneWayTools: {
-    title: "One-Way Tools",
-    short: "One tool starts locked.",
+  deepFog: {
+    title: "Deep Fog",
+    short: "Blind lines stay blind.",
     description:
-      "You begin with only one tool active. Make enough correct marks to unlock the second one.",
+      "Some lines reveal nothing until you fully match their target or resolve the whole line.",
   },
-  comboHintPenalty: {
-    title: "Hint Tax",
-    short: "Hints reduce rewards.",
+  commitLine: {
+    title: "Commit Line",
+    short: "Finish what you started.",
     description:
-      "Hints still help you finish, but they cap the level's star payout and make missions harder to perfect.",
+      "Your first committed mark locks you onto that row or column until you hit a checkpoint or finish the line cleanly.",
+  },
+  toolLock: {
+    title: "Tool Lock",
+    short: "One tool starts sealed.",
+    description:
+      "You begin in select mode with erase locked. Switches unlock only after you match a visible target.",
+  },
+  crossBlind: {
+    title: "Cross Blind",
+    short: "One whole axis is hidden.",
+    description:
+      "All row or all column products begin concealed and only return after you match enough lines on the visible axis.",
   },
 };
 
@@ -97,8 +120,12 @@ const PROGRESSION: Record<DifficultyId, LevelBand[]> = {
       chapter: "Academy",
       bandLabel: "Warm-up Grid",
       maxHearts: 3,
-      modifiers: [],
-      missions: ["flawless", "noHints"],
+      presetCycle: [
+        {
+          modifiers: [],
+          missions: ["flawless", "noHints"],
+        },
+      ],
     },
     {
       from: 6,
@@ -106,30 +133,43 @@ const PROGRESSION: Record<DifficultyId, LevelBand[]> = {
       chapter: "Academy",
       bandLabel: "Anchored Rows",
       maxHearts: 3,
-      modifiers: ["lockedCells"],
-      missions: ["flawless", "noHints"],
-      lockedCells: 2,
+      presetCycle: [
+        {
+          modifiers: ["lockedCells"],
+          missions: ["flawless", "noHints"],
+          lockedCells: 2,
+        },
+        {
+          modifiers: ["lockedCells"],
+          missions: ["flawless", "noHints"],
+          lockedCells: 3,
+        },
+      ],
     },
     {
       from: 11,
-      to: 15,
+      to: Infinity,
       chapter: "Academy",
       bandLabel: "Veiled Signals",
       maxHearts: 3,
-      modifiers: ["foggedTargets"],
-      missions: ["flawless", "noHints"],
-      hiddenTargets: 1,
-    },
-    {
-      from: 16,
-      to: Infinity,
-      chapter: "Academy",
-      bandLabel: "Method Drill",
-      maxHearts: 3,
-      modifiers: ["oneWayTools", "comboHintPenalty"],
-      missions: ["flawless", "rowRush"],
-      lockMode: "select",
-      toolUnlockCorrectMarks: 3,
+      presetCycle: [
+        {
+          modifiers: ["foggedTargets"],
+          missions: ["flawless", "noHints"],
+          foggedTargets: 1,
+        },
+        {
+          modifiers: ["lockedCells", "foggedTargets"],
+          missions: ["flawless", "noHints"],
+          lockedCells: 2,
+          foggedTargets: 1,
+        },
+        {
+          modifiers: ["foggedTargets"],
+          missions: ["flawless", "noHints"],
+          foggedTargets: 2,
+        },
+      ],
     },
   ],
   medium: [
@@ -137,32 +177,63 @@ const PROGRESSION: Record<DifficultyId, LevelBand[]> = {
       from: 1,
       to: 4,
       chapter: "Workshop",
-      bandLabel: "Sharper Lines",
+      bandLabel: "Controlled Starts",
       maxHearts: 3,
-      modifiers: ["lockedCells"],
-      missions: ["flawless", "noHints"],
-      lockedCells: 3,
+      presetCycle: [
+        {
+          modifiers: ["lockedCells"],
+          missions: ["flawless", "noHints"],
+          lockedCells: 3,
+        },
+        {
+          modifiers: ["foggedTargets"],
+          missions: ["flawless", "noHints"],
+          foggedTargets: 1,
+        },
+        {
+          modifiers: ["toolLock"],
+          missions: ["flawless", "rowRush"],
+          toolLockMode: "select",
+        },
+        {
+          modifiers: ["commitLine"],
+          missions: ["flawless", "noHints"],
+          commitLineCheckpoint: 3,
+        },
+      ],
     },
     {
       from: 5,
-      to: 8,
-      chapter: "Workshop",
-      bandLabel: "Tight Margin",
-      maxHearts: 2,
-      modifiers: ["limitedErrors", "foggedTargets"],
-      missions: ["flawless", "noHints"],
-      hiddenTargets: 1,
-    },
-    {
-      from: 9,
       to: Infinity,
       chapter: "Workshop",
-      bandLabel: "Disciplined Flow",
-      maxHearts: 2,
-      modifiers: ["limitedErrors", "oneWayTools", "comboHintPenalty"],
-      missions: ["flawless", "rowRush"],
-      lockMode: "erase",
-      toolUnlockCorrectMarks: 4,
+      bandLabel: "Grinding Decisions",
+      maxHearts: 3,
+      presetCycle: [
+        {
+          modifiers: ["lockedCells", "foggedTargets"],
+          missions: ["flawless", "noHints"],
+          lockedCells: 2,
+          foggedTargets: 1,
+        },
+        {
+          modifiers: ["toolLock", "foggedTargets"],
+          missions: ["flawless", "rowRush"],
+          foggedTargets: 1,
+          toolLockMode: "select",
+        },
+        {
+          modifiers: ["commitLine", "lockedCells"],
+          missions: ["flawless", "noHints"],
+          lockedCells: 3,
+          commitLineCheckpoint: 3,
+        },
+        {
+          modifiers: ["toolLock", "commitLine"],
+          missions: ["flawless", "noHints"],
+          toolLockMode: "select",
+          commitLineCheckpoint: 3,
+        },
+      ],
     },
   ],
   hard: [
@@ -172,56 +243,97 @@ const PROGRESSION: Record<DifficultyId, LevelBand[]> = {
       chapter: "Forge",
       bandLabel: "Pressure Build",
       maxHearts: 2,
-      modifiers: ["limitedErrors", "lockedCells"],
-      missions: ["flawless", "noHints"],
-      lockedCells: 4,
+      presetCycle: [
+        {
+          modifiers: ["limitedErrors", "deepFog"],
+          missions: ["flawless", "noHints"],
+          deepFogTargets: 2,
+        },
+        {
+          modifiers: ["limitedErrors", "commitLine"],
+          missions: ["flawless", "noHints"],
+          commitLineCheckpoint: 3,
+        },
+        {
+          modifiers: ["limitedErrors", "toolLock"],
+          missions: ["flawless", "rowRush"],
+          toolLockMode: "select",
+        },
+        {
+          modifiers: ["limitedErrors", "lockedCells", "foggedTargets"],
+          missions: ["flawless", "noHints"],
+          lockedCells: 3,
+          foggedTargets: 1,
+        },
+      ],
     },
     {
       from: 5,
-      to: 8,
+      to: Infinity,
       chapter: "Forge",
       bandLabel: "Blind Corners",
       maxHearts: 2,
-      modifiers: ["limitedErrors", "foggedTargets", "comboHintPenalty"],
-      missions: ["flawless", "rowRush"],
-      hiddenTargets: 2,
-    },
-    {
-      from: 9,
-      to: Infinity,
-      chapter: "Forge",
-      bandLabel: "Tool Discipline",
-      maxHearts: 2,
-      modifiers: ["limitedErrors", "oneWayTools", "foggedTargets", "comboHintPenalty"],
-      missions: ["flawless", "noHints", "rowRush"],
-      lockMode: "select",
-      toolUnlockCorrectMarks: 5,
-      hiddenTargets: 2,
+      presetCycle: [
+        {
+          modifiers: ["limitedErrors", "deepFog", "lockedCells"],
+          missions: ["flawless", "noHints"],
+          deepFogTargets: 2,
+          lockedCells: 4,
+        },
+        {
+          modifiers: ["limitedErrors", "deepFog", "commitLine"],
+          missions: ["flawless", "noHints"],
+          deepFogTargets: 2,
+          commitLineCheckpoint: 3,
+        },
+        {
+          modifiers: ["limitedErrors", "toolLock", "foggedTargets"],
+          missions: ["flawless", "rowRush"],
+          foggedTargets: 1,
+          toolLockMode: "select",
+        },
+        {
+          modifiers: ["limitedErrors", "commitLine", "foggedTargets"],
+          missions: ["flawless", "noHints"],
+          foggedTargets: 1,
+          commitLineCheckpoint: 3,
+        },
+      ],
     },
   ],
   expert: [
     {
       from: 1,
-      to: 5,
-      chapter: "Sanctum",
-      bandLabel: "Hidden Framework",
-      maxHearts: 2,
-      modifiers: ["limitedErrors", "lockedCells", "foggedTargets"],
-      missions: ["flawless", "noHints"],
-      lockedCells: 4,
-      hiddenTargets: 2,
-    },
-    {
-      from: 6,
       to: Infinity,
       chapter: "Sanctum",
-      bandLabel: "Strict Order",
+      bandLabel: "Hidden Framework",
       maxHearts: 1,
-      modifiers: ["limitedErrors", "oneWayTools", "foggedTargets", "comboHintPenalty"],
-      missions: ["flawless", "noHints", "rowRush"],
-      lockMode: "erase",
-      toolUnlockCorrectMarks: 5,
-      hiddenTargets: 2,
+      presetCycle: [
+        {
+          modifiers: ["limitedErrors", "deepFog", "commitLine"],
+          missions: ["flawless", "noHints"],
+          deepFogTargets: 2,
+          commitLineCheckpoint: 4,
+        },
+        {
+          modifiers: ["limitedErrors", "crossBlind", "foggedTargets"],
+          missions: ["flawless", "noHints"],
+          foggedTargets: 1,
+          crossBlindUnlockAfterMatchedVisibleLines: 2,
+        },
+        {
+          modifiers: ["limitedErrors", "deepFog", "crossBlind"],
+          missions: ["flawless", "noHints"],
+          deepFogTargets: 2,
+          crossBlindUnlockAfterMatchedVisibleLines: 2,
+        },
+        {
+          modifiers: ["limitedErrors", "toolLock", "commitLine"],
+          missions: ["flawless", "noHints"],
+          toolLockMode: "select",
+          commitLineCheckpoint: 4,
+        },
+      ],
     },
   ],
   mythic: [
@@ -231,18 +343,36 @@ const PROGRESSION: Record<DifficultyId, LevelBand[]> = {
       chapter: "Mythic",
       bandLabel: "Relentless Circuit",
       maxHearts: 1,
-      modifiers: [
-        "limitedErrors",
-        "lockedCells",
-        "foggedTargets",
-        "oneWayTools",
-        "comboHintPenalty",
+      presetCycle: [
+        {
+          modifiers: ["limitedErrors", "deepFog", "crossBlind", "commitLine"],
+          missions: ["flawless", "noHints"],
+          deepFogTargets: 3,
+          crossBlindUnlockAfterMatchedVisibleLines: 3,
+          commitLineCheckpoint: 4,
+        },
+        {
+          modifiers: ["limitedErrors", "lockedCells", "deepFog", "commitLine"],
+          missions: ["flawless", "noHints"],
+          lockedCells: 5,
+          deepFogTargets: 3,
+          commitLineCheckpoint: 4,
+        },
+        {
+          modifiers: ["limitedErrors", "lockedCells", "crossBlind", "foggedTargets"],
+          missions: ["flawless", "noHints"],
+          lockedCells: 5,
+          foggedTargets: 2,
+          crossBlindUnlockAfterMatchedVisibleLines: 3,
+        },
+        {
+          modifiers: ["limitedErrors", "lockedCells", "deepFog", "toolLock"],
+          missions: ["flawless", "rowRush"],
+          lockedCells: 5,
+          deepFogTargets: 3,
+          toolLockMode: "select",
+        },
       ],
-      missions: ["flawless", "noHints", "rowRush"],
-      lockMode: "select",
-      toolUnlockCorrectMarks: 6,
-      lockedCells: 5,
-      hiddenTargets: 2,
     },
   ],
 };
@@ -256,10 +386,16 @@ export function getLevelBlueprint(
       (candidate) => level >= candidate.from && level <= candidate.to,
     ) ?? PROGRESSION[difficulty][PROGRESSION[difficulty].length - 1];
 
+  const presetIndex = Math.max(0, level - band.from) % band.presetCycle.length;
+  const preset = band.presetCycle[presetIndex];
+
   return {
-    ...band,
+    ...preset,
     difficulty,
     level,
+    chapter: band.chapter,
+    bandLabel: band.bandLabel,
+    maxHearts: band.maxHearts,
   };
 }
 

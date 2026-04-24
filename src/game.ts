@@ -23,7 +23,34 @@ export type RevealedCell = {
 export type HiddenTarget = {
   axis: TargetAxis;
   index: number;
-  revealAfterMarks: number;
+  reveal:
+    | {
+        kind: "marks";
+        threshold: number;
+      }
+    | {
+        kind: "matchedOrResolved";
+      };
+};
+
+export type CrossBlind = {
+  hiddenAxis: TargetAxis;
+  unlockAfterMatchedVisibleLines: number;
+};
+
+export type CommitLine = {
+  axis: TargetAxis;
+  checkpoint: number;
+};
+
+export type ToolLock = {
+  initialMode: ToolMode;
+  unlock: "visibleTargetMatched";
+};
+
+export type ActiveCommitment = {
+  axis: TargetAxis;
+  index: number;
 };
 
 export type PuzzleMission = {
@@ -52,8 +79,9 @@ export type Puzzle = {
   missions: PuzzleMission[];
   revealedMarks?: RevealedCell[];
   hiddenTargets?: HiddenTarget[];
-  initialMode?: ToolMode;
-  toolUnlockCorrectMarks?: number;
+  crossBlind?: CrossBlind;
+  commitLine?: CommitLine;
+  toolLock?: ToolLock;
   maxHearts: number;
   chapter: string;
   bandLabel: string;
@@ -574,52 +602,125 @@ function isPuzzleBalanced(board: number[][], solution: boolean[][], config: Diff
   );
 }
 
+function pickDistributedCell(
+  candidates: { row: number; col: number; selected: boolean }[],
+  chosen: { row: number; col: number; selected: boolean }[],
+) {
+  const shuffled = shuffle(candidates);
+  let best = shuffled[0] ?? null;
+  let bestScore = -1;
+
+  for (const candidate of shuffled) {
+    const alreadyChosen = chosen.some(
+      (cell) => cell.row === candidate.row && cell.col === candidate.col,
+    );
+
+    if (alreadyChosen) {
+      continue;
+    }
+
+    const rowUnused = chosen.every((cell) => cell.row !== candidate.row) ? 1 : 0;
+    const colUnused = chosen.every((cell) => cell.col !== candidate.col) ? 1 : 0;
+    const score = rowUnused + colUnused;
+
+    if (score > bestScore) {
+      best = candidate;
+      bestScore = score;
+    }
+  }
+
+  return best;
+}
+
 function createRevealedMarks(solution: boolean[][], requestedCount: number) {
   if (requestedCount <= 0) {
     return [];
   }
 
-  const preferred = shuffle(
-    solution
-      .flatMap((line, row) =>
-        line.map((selected, col) => ({
-          row,
-          col,
-          selected,
-        })),
-      )
-      .sort((left, right) => Number(right.selected) - Number(left.selected)),
+  const allCells = solution.flatMap((line, row) =>
+    line.map((selected, col) => ({
+      row,
+      col,
+      selected,
+    })),
   );
+  const selectedCells = allCells.filter((cell) => cell.selected);
+  const erasedCells = allCells.filter((cell) => !cell.selected);
+  const chosen: typeof allCells = [];
 
-  return preferred.slice(0, Math.min(requestedCount, preferred.length)).map((cell) => ({
+  if (requestedCount >= 2 && selectedCells.length > 0 && erasedCells.length > 0) {
+    const firstSelected = pickDistributedCell(selectedCells, chosen);
+    if (firstSelected) {
+      chosen.push(firstSelected);
+    }
+
+    const firstErased = pickDistributedCell(erasedCells, chosen);
+    if (firstErased) {
+      chosen.push(firstErased);
+    }
+  }
+
+  const totalCount = Math.min(requestedCount, allCells.length);
+
+  while (chosen.length < totalCount) {
+    const nextCell = pickDistributedCell(allCells, chosen);
+
+    if (!nextCell) {
+      break;
+    }
+
+    chosen.push(nextCell);
+  }
+
+  return chosen.map((cell) => ({
     row: cell.row,
     col: cell.col,
     mark: cell.selected ? ("selected" as const) : ("erased" as const),
   }));
 }
 
-function createHiddenTargets(size: number, count: number): HiddenTarget[] {
-  if (count <= 0) {
+function createHiddenTargets(
+  size: number,
+  foggedCount: number,
+  deepFogCount: number,
+): HiddenTarget[] {
+  if (foggedCount <= 0 && deepFogCount <= 0) {
     return [];
   }
 
-  const rows = shuffle(
-    Array.from({ length: size }, (_, index) => ({
+  const targets = shuffle([
+    ...Array.from({ length: size }, (_, index) => ({
       axis: "row" as const,
       index,
     })),
-  );
-  const cols = shuffle(
-    Array.from({ length: size }, (_, index) => ({
+    ...Array.from({ length: size }, (_, index) => ({
       axis: "column" as const,
       index,
     })),
-  );
+  ]);
+  const hiddenTargets: HiddenTarget[] = [];
+  const lightRevealThreshold = Math.min(3, Math.max(2, Math.ceil(size / 2)));
 
-  return shuffle([...rows.slice(0, count), ...cols.slice(0, count)]).slice(0, count).map((target) => ({
-    ...target,
-    revealAfterMarks: Math.min(3, Math.max(2, Math.ceil(size / 2))),
-  }));
+  for (const target of targets.slice(0, foggedCount)) {
+    hiddenTargets.push({
+      ...target,
+      reveal: {
+        kind: "marks",
+        threshold: lightRevealThreshold,
+      },
+    });
+  }
+
+  for (const target of targets.slice(foggedCount, foggedCount + deepFogCount)) {
+    hiddenTargets.push({
+      ...target,
+      reveal: {
+        kind: "matchedOrResolved",
+      },
+    });
+  }
+
+  return hiddenTargets;
 }
 
 export function createPuzzle(level: number, difficulty: DifficultyId): Puzzle {
@@ -645,10 +746,10 @@ export function createPuzzle(level: number, difficulty: DifficultyId): Puzzle {
       continue;
     }
 
-    return {
-      id: `${difficulty}-${level}-${Date.now()}-${attempt}`,
-      level,
-      difficulty,
+      return {
+        id: `${difficulty}-${level}-${Date.now()}-${attempt}`,
+        level,
+        difficulty,
       size: config.size,
       board,
       solution,
@@ -658,18 +759,39 @@ export function createPuzzle(level: number, difficulty: DifficultyId): Puzzle {
         id,
         ...MODIFIER_DETAILS[id],
       })),
-      missions: blueprint.missions.map((id) => ({
-        id,
-        ...MISSION_DETAILS[id],
-      })),
-      revealedMarks: createRevealedMarks(solution, blueprint.lockedCells ?? 0),
-      hiddenTargets: createHiddenTargets(config.size, blueprint.hiddenTargets ?? 0),
-      initialMode: blueprint.lockMode,
-      toolUnlockCorrectMarks: blueprint.toolUnlockCorrectMarks,
-      maxHearts: blueprint.maxHearts,
-      chapter: blueprint.chapter,
-      bandLabel: blueprint.bandLabel,
-    };
+        missions: blueprint.missions.map((id) => ({
+          id,
+          ...MISSION_DETAILS[id],
+        })),
+        revealedMarks: createRevealedMarks(solution, blueprint.lockedCells ?? 0),
+        hiddenTargets: createHiddenTargets(
+          config.size,
+          blueprint.foggedTargets ?? 0,
+          blueprint.deepFogTargets ?? 0,
+        ),
+        crossBlind: blueprint.crossBlindUnlockAfterMatchedVisibleLines
+          ? {
+              hiddenAxis: sample(["row", "column"] as const),
+              unlockAfterMatchedVisibleLines:
+                blueprint.crossBlindUnlockAfterMatchedVisibleLines,
+            }
+          : undefined,
+        commitLine: blueprint.commitLineCheckpoint
+          ? {
+              axis: sample(["row", "column"] as const),
+              checkpoint: blueprint.commitLineCheckpoint,
+            }
+          : undefined,
+        toolLock: blueprint.toolLockMode
+          ? {
+              initialMode: blueprint.toolLockMode,
+              unlock: "visibleTargetMatched",
+            }
+          : undefined,
+        maxHearts: blueprint.maxHearts,
+        chapter: blueprint.chapter,
+        bandLabel: blueprint.bandLabel,
+      };
   }
 
   throw new Error(`Unable to generate a unique ${difficulty} puzzle.`);
@@ -751,6 +873,34 @@ export function getResolvedLineCount(puzzle: Puzzle, marks: CellMark[][]) {
   return rows + cols;
 }
 
+export function isLineTargetMatched(
+  puzzle: Puzzle,
+  marks: CellMark[][],
+  axis: TargetAxis,
+  index: number,
+) {
+  const target = axis === "row" ? puzzle.rowTargets[index] : puzzle.colTargets[index];
+  const progress =
+    axis === "row"
+      ? getRowProgress(puzzle, marks, index)
+      : getColProgress(puzzle, marks, index);
+
+  return progress === target;
+}
+
+export function countMatchedTargetsOnAxis(
+  puzzle: Puzzle,
+  marks: CellMark[][],
+  axis: TargetAxis,
+) {
+  return Array.from(
+    {
+      length: axis === "row" ? puzzle.rowTargets.length : puzzle.colTargets.length,
+    },
+    (_, index) => isLineTargetMatched(puzzle, marks, axis, index),
+  ).filter(Boolean).length;
+}
+
 export function getCorrectMarkCount(puzzle: Puzzle, marks: CellMark[][]) {
   let total = 0;
 
@@ -773,6 +923,129 @@ export function getCorrectMarkCount(puzzle: Puzzle, marks: CellMark[][]) {
   return total;
 }
 
+export function getCommittedLineCorrectMarks(
+  puzzle: Puzzle,
+  marks: CellMark[][],
+  axis: TargetAxis,
+  index: number,
+) {
+  let total = 0;
+
+  if (axis === "row") {
+    for (let col = 0; col < puzzle.size; col += 1) {
+      const mark = marks[index][col];
+
+      if (mark === "hidden") {
+        continue;
+      }
+
+      const expected = puzzle.solution[index][col] ? "selected" : "erased";
+      if (mark === expected) {
+        total += 1;
+      }
+    }
+
+    return total;
+  }
+
+  for (let row = 0; row < puzzle.size; row += 1) {
+    const mark = marks[row][index];
+
+    if (mark === "hidden") {
+      continue;
+    }
+
+    const expected = puzzle.solution[row][index] ? "selected" : "erased";
+    if (mark === expected) {
+      total += 1;
+    }
+  }
+
+  return total;
+}
+
+export function hasVisibleMatchedTarget(puzzle: Puzzle, marks: CellMark[][]) {
+  const axes: TargetAxis[] = ["row", "column"];
+
+  for (const axis of axes) {
+    const lineCount = axis === "row" ? puzzle.rowTargets.length : puzzle.colTargets.length;
+
+    for (let index = 0; index < lineCount; index += 1) {
+      if (getVisibleTarget(puzzle, marks, axis, index) === null) {
+        continue;
+      }
+
+      if (isLineTargetMatched(puzzle, marks, axis, index)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+export function getNextCommitment(
+  puzzle: Puzzle,
+  marks: CellMark[][],
+  current: ActiveCommitment | null,
+  row?: number,
+  col?: number,
+) {
+  if (!puzzle.commitLine) {
+    return null;
+  }
+
+  const nextCommitment =
+    current ??
+    (row !== undefined && col !== undefined
+      ? {
+          axis: puzzle.commitLine.axis,
+          index: puzzle.commitLine.axis === "row" ? row : col,
+        }
+      : null);
+
+  if (!nextCommitment) {
+    return null;
+  }
+
+  const resolved =
+    nextCommitment.axis === "row"
+      ? isRowResolved(puzzle, marks, nextCommitment.index)
+      : isColResolved(puzzle, marks, nextCommitment.index);
+  const targetVisible =
+    getVisibleTarget(puzzle, marks, nextCommitment.axis, nextCommitment.index) !== null;
+  const matchedVisibleTarget =
+    targetVisible &&
+    isLineTargetMatched(puzzle, marks, nextCommitment.axis, nextCommitment.index);
+  const checkpointReached =
+    getCommittedLineCorrectMarks(
+      puzzle,
+      marks,
+      nextCommitment.axis,
+      nextCommitment.index,
+    ) >= puzzle.commitLine.checkpoint;
+
+  if (resolved || matchedVisibleTarget || checkpointReached) {
+    return null;
+  }
+
+  return nextCommitment;
+}
+
+export function isCellBlockedByCommitment(
+  commitment: ActiveCommitment | null,
+  row: number,
+  col: number,
+) {
+  if (!commitment) {
+    return false;
+  }
+
+  return commitment.axis === "row"
+    ? commitment.index !== row
+    : commitment.index !== col;
+}
+
 export function getMarksCommittedOnLine(
   puzzle: Puzzle,
   marks: CellMark[][],
@@ -786,12 +1059,32 @@ export function getMarksCommittedOnLine(
   return puzzle.board.filter((_, row) => marks[row][index] !== "hidden").length;
 }
 
+function isCrossBlindAxisHidden(
+  puzzle: Puzzle,
+  marks: CellMark[][],
+  axis: TargetAxis,
+) {
+  if (!puzzle.crossBlind || puzzle.crossBlind.hiddenAxis !== axis) {
+    return false;
+  }
+
+  const visibleAxis = axis === "row" ? "column" : "row";
+  return (
+    countMatchedTargetsOnAxis(puzzle, marks, visibleAxis) <
+    puzzle.crossBlind.unlockAfterMatchedVisibleLines
+  );
+}
+
 export function isTargetHidden(
   puzzle: Puzzle,
   marks: CellMark[][],
   axis: TargetAxis,
   index: number,
 ) {
+  if (isCrossBlindAxisHidden(puzzle, marks, axis)) {
+    return true;
+  }
+
   const hiddenTarget = puzzle.hiddenTargets?.find(
     (target) => target.axis === axis && target.index === index,
   );
@@ -800,7 +1093,42 @@ export function isTargetHidden(
     return false;
   }
 
-  return getMarksCommittedOnLine(puzzle, marks, axis, index) < hiddenTarget.revealAfterMarks;
+  if (hiddenTarget.reveal.kind === "marks") {
+    return (
+      getMarksCommittedOnLine(puzzle, marks, axis, index) <
+      hiddenTarget.reveal.threshold
+    );
+  }
+
+  const resolved =
+    axis === "row"
+      ? isRowResolved(puzzle, marks, index)
+      : isColResolved(puzzle, marks, index);
+
+  return !isLineTargetMatched(puzzle, marks, axis, index) && !resolved;
+}
+
+export function getTargetConcealment(
+  puzzle: Puzzle,
+  marks: CellMark[][],
+  axis: TargetAxis,
+  index: number,
+) {
+  if (isCrossBlindAxisHidden(puzzle, marks, axis)) {
+    return "blind" as const;
+  }
+
+  const hiddenTarget = puzzle.hiddenTargets?.find(
+    (target) => target.axis === axis && target.index === index,
+  );
+
+  if (hiddenTarget && isTargetHidden(puzzle, marks, axis, index)) {
+    return hiddenTarget.reveal.kind === "matchedOrResolved"
+      ? ("deepFog" as const)
+      : ("fog" as const);
+  }
+
+  return null;
 }
 
 export function getVisibleTarget(
