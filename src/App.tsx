@@ -220,7 +220,7 @@ function unlockAllDifficulties(progress: ProgressState): ProgressState {
 function loadPersistedState(): PersistedState {
   const progress = createProgressState();
   const fallback: PersistedState = {
-    theme: "dark",
+    theme: "light",
     difficulty: "easy",
     hintStock: STARTING_HINTS,
     progress,
@@ -765,25 +765,25 @@ function App() {
   return (
     <div className="min-h-screen bg-[var(--app-bg)] text-[var(--text-primary)] transition-colors duration-300">
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -left-24 top-12 h-72 w-72 rounded-full bg-[var(--glow-primary)] blur-3xl" />
-        <div className="absolute right-[-4rem] top-1/3 h-80 w-80 rounded-full bg-[var(--glow-secondary)] blur-3xl" />
-        <div className="absolute inset-x-0 bottom-0 h-56 bg-[radial-gradient(circle_at_bottom,rgba(255,255,255,0.12),transparent_62%)]" />
+        <div className="absolute inset-0 opacity-45 [background-image:linear-gradient(90deg,color-mix(in_oklch,var(--border)_45%,transparent)_1px,transparent_1px),linear-gradient(180deg,color-mix(in_oklch,var(--border)_45%,transparent)_1px,transparent_1px)] [background-size:42px_42px]" />
+        <div className="absolute left-[-12%] top-16 h-24 w-[78rem] rotate-[-7deg] bg-[var(--glow-secondary)] opacity-70" />
+        <div className="absolute bottom-20 right-[-14rem] h-20 w-[56rem] rotate-[-14deg] bg-[var(--glow-primary)] opacity-80" />
       </div>
 
-      <main className="relative mx-auto flex min-h-screen w-full max-w-6xl flex-col px-0 pb-0 pt-0 sm:px-6 sm:pb-8 sm:pt-6 lg:px-8">
+      <main className="relative mx-auto flex min-h-screen w-full max-w-7xl flex-col px-0 pb-0 pt-0 sm:px-5 sm:pb-8 sm:pt-5 lg:px-8">
         <section className="mx-auto flex w-full max-w-none flex-col gap-6 xl:flex-row xl:items-start">
           <div className="min-w-0 flex-1">
-            <div className="min-h-screen rounded-none border-y border-[var(--panel-border)] bg-[var(--panel-bg)]/95 p-3 shadow-[0_24px_80px_rgba(6,10,24,0.35)] backdrop-blur sm:min-h-0 sm:rounded-[2rem] sm:border sm:p-4 xl:p-6">
+            <div className="puzzle-surface min-h-screen rounded-none border-y border-[var(--panel-border)] p-3 shadow-[0_24px_80px_var(--shadow-board)] backdrop-blur sm:min-h-0 sm:rounded-[2rem] sm:border sm:p-4 xl:p-6">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.42em] text-[var(--text-muted)]">
+                  <p className="text-xs font-black uppercase tracking-[0.36em] text-[var(--accent-strong)]">
                     Cross Multiply
                   </p>
                   <div className="mt-3 flex flex-wrap items-center gap-3">
-                    <span className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-muted)] px-3 py-1 text-[0.7rem] uppercase tracking-[0.3em] text-[var(--text-muted)]">
+                    <span className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-muted)] px-3 py-1 text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--text-muted)]">
                       {puzzle.chapter}
                     </span>
-                    <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-[0.72rem] uppercase tracking-[0.25em] text-[var(--accent-strong)]">
+                    <span className="rounded-full bg-[var(--accent-soft)] px-3 py-1 text-[0.72rem] font-black uppercase tracking-[0.22em] text-[var(--accent-strong)] shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--accent)_20%,transparent)]">
                       {puzzle.bandLabel}
                     </span>
                   </div>
@@ -798,7 +798,7 @@ function App() {
                       session.status !== "playing" ||
                       !hintGateUnlocked
                     }
-                    className="relative rounded-full border border-[var(--panel-border)] bg-[var(--panel-muted)] p-3 text-[var(--text-primary)] transition hover:-translate-y-0.5 hover:border-[var(--accent)]/40 hover:bg-[var(--accent-soft)] disabled:cursor-not-allowed disabled:opacity-50"
+                    className="relative rounded-full border border-[var(--panel-border)] bg-[var(--panel-muted)] p-3 text-[var(--text-primary)] shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_45%,transparent)] transition hover:-translate-y-0.5 hover:border-[var(--accent)]/50 hover:bg-[var(--accent-soft)] disabled:cursor-not-allowed disabled:opacity-50"
                     aria-label={
                       hintGateUnlocked
                         ? "Use hint"
@@ -806,14 +806,14 @@ function App() {
                     }
                   >
                     <Lightbulb className="h-5 w-5" strokeWidth={1.8} />
-                    <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-[var(--accent)] px-1.5 py-0.5 text-[0.65rem] font-semibold leading-none text-white">
+                    <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-[var(--accent-pop)] px-1.5 py-0.5 text-[0.65rem] font-black leading-none text-[var(--fg)]">
                       {hintGateUnlocked ? hintStock : <Lock className="h-3 w-3" />}
                     </span>
                   </HapticButton>
                   <HapticButton
                     type="button"
                     onClick={() => generateLevel(difficulty, puzzle.level)}
-                    className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-muted)] p-3 text-[var(--text-primary)] transition hover:-translate-y-0.5 hover:border-[var(--accent)]/40 hover:bg-[var(--accent-soft)]"
+                    className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-muted)] p-3 text-[var(--text-primary)] shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_45%,transparent)] transition hover:-translate-y-0.5 hover:border-[var(--accent)]/50 hover:bg-[var(--accent-soft)]"
                     aria-label="Generate a fresh puzzle"
                   >
                     <RefreshCw className="h-5 w-5" strokeWidth={1.8} />
@@ -821,7 +821,7 @@ function App() {
                   <HapticButton
                     type="button"
                     onClick={toggleTheme}
-                    className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-muted)] p-3 text-[var(--text-primary)] transition hover:-translate-y-0.5 hover:border-[var(--accent)]/40 hover:bg-[var(--accent-soft)]"
+                    className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-muted)] p-3 text-[var(--text-primary)] shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_45%,transparent)] transition hover:-translate-y-0.5 hover:border-[var(--accent)]/50 hover:bg-[var(--accent-soft)]"
                     aria-label="Toggle theme"
                   >
                     {theme === "dark" ? (
@@ -835,14 +835,14 @@ function App() {
 
               <div className="mt-4 flex flex-col gap-5 xl:mt-6 xl:flex-row xl:items-start xl:justify-between">
                 <div>
-                  <p className="text-sm uppercase tracking-[0.35em] text-[var(--text-muted)]">
+                  <p className="text-sm font-black uppercase tracking-[0.26em] text-[var(--text-muted)]">
                     {difficultyConfig.label} Chapter
                   </p>
                   <div className="mt-3 flex flex-wrap items-end gap-3">
-                    <h1 className="font-['Georgia'] text-4xl font-bold tracking-tight text-[var(--text-primary)] sm:text-5xl">
+                    <h1 className="game-number text-5xl font-black tracking-tight text-[var(--text-primary)] sm:text-6xl">
                       Level {puzzle.level}
                     </h1>
-                    <div className="pb-1 text-sm uppercase tracking-[0.3em] text-[var(--text-muted)]">
+                    <div className="rounded-full bg-[var(--lemon)] px-3 py-1 text-sm font-black uppercase tracking-[0.22em] text-[var(--fg)]">
                       {difficultyConfig.badge}
                     </div>
                   </div>
@@ -852,7 +852,7 @@ function App() {
                         key={index}
                         className={`h-5 w-5 ${
                           index < (currentResult?.stars ?? 0)
-                            ? "fill-amber-300 text-amber-300"
+                            ? "fill-[var(--lemon)] text-[var(--lemon)]"
                             : "text-[var(--panel-border)]"
                         }`}
                         strokeWidth={1.8}
@@ -874,17 +874,17 @@ function App() {
                         type="button"
                         onClick={() => changeDifficulty(id)}
                         disabled={!unlocked}
-                        className={`shrink-0 rounded-[1.4rem] border px-3 py-3 text-left transition sm:px-4 ${
+                        className={`shrink-0 rounded-[1.45rem] border px-3 py-3 text-left transition duration-200 sm:px-4 ${
                           active
-                            ? "border-[var(--accent)] bg-[var(--accent-soft)] shadow-[0_6px_18px_rgba(247,122,168,0.16)]"
-                            : "border-[var(--panel-border)] bg-[var(--panel-muted)] hover:border-[var(--accent)]/30 hover:bg-[var(--panel-bg)]"
+                            ? "border-[var(--accent)] bg-[var(--accent-soft)] shadow-[inset_0_-3px_0_color-mix(in_oklch,var(--accent)_28%,transparent),0_8px_18px_var(--shadow-soft)]"
+                            : "border-[var(--panel-border)] bg-[var(--panel-muted)] shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_45%,transparent)] hover:-translate-y-0.5 hover:border-[var(--accent)]/50 hover:bg-[var(--panel-bg)]"
                         } ${!unlocked ? "cursor-not-allowed opacity-45" : ""}`}
                       >
-                        <div className="flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-[var(--text-muted)]">
+                        <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.24em] text-[var(--text-muted)]">
                           {!unlocked && <Lock className="h-3.5 w-3.5" />}
                           {DIFFICULTIES[id].label}
                         </div>
-                        <div className="mt-2 text-lg font-semibold text-[var(--text-primary)]">
+                        <div className="game-number mt-2 text-lg font-black text-[var(--text-primary)]">
                           Lv {progress[id].highestUnlockedLevel}
                         </div>
                         <div className="mt-1 text-xs text-[var(--text-secondary)]">
@@ -897,58 +897,58 @@ function App() {
               </div>
 
               <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_21rem]">
-                <div className="rounded-[1.75rem] border border-[var(--panel-border)] bg-[var(--board-shell)] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] sm:p-4">
+                <div className="rounded-[1.75rem] border border-[var(--panel-border)] bg-[var(--board-shell)] p-2 shadow-[inset_0_1px_0_color-mix(in_oklch,var(--surface)_55%,transparent),0_20px_44px_var(--shadow-board)] sm:p-4">
                   <div className="mb-4 flex flex-wrap items-center gap-3">
                     <Hearts hearts={session.hearts} maxHearts={session.maxHearts} />
-                    <div className="inline-flex items-center gap-2 rounded-full border border-[var(--panel-border)] bg-[var(--panel-muted)] px-3 py-1.5 text-xs uppercase tracking-[0.24em] text-[var(--text-secondary)]">
+                    <div className="inline-flex items-center gap-2 rounded-full border border-[var(--panel-border)] bg-[var(--panel-muted)] px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-[var(--text-secondary)] shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_35%,transparent)]">
                       <CheckCircle2 className="h-3.5 w-3.5" />
                       Correct {correctMarks}
                     </div>
                     {puzzle.hintGate && !hintGateUnlocked && (
-                      <div className="inline-flex items-center gap-2 rounded-full border border-amber-300/18 bg-amber-400/10 px-3 py-1.5 text-xs uppercase tracking-[0.24em] text-amber-200">
+                      <div className="inline-flex items-center gap-2 rounded-full border border-[var(--lemon)]/45 bg-[color-mix(in_oklch,var(--lemon)_22%,transparent)] px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-[var(--text-primary)]">
                         <Lightbulb className="h-3.5 w-3.5" />
                         Hints {correctMarks}/{puzzle.hintGate.unlockAfterCorrectMarks}
                       </div>
                     )}
                     {sealedProgress && !sealedProgress.unlocked && (
-                      <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/18 bg-cyan-400/10 px-3 py-1.5 text-xs uppercase tracking-[0.24em] text-cyan-100">
+                      <div className="inline-flex items-center gap-2 rounded-full border border-[var(--sky)]/35 bg-[color-mix(in_oklch,var(--sky)_16%,transparent)] px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-[var(--sky)]">
                         <Lock className="h-3.5 w-3.5" />
                         Seals {sealedProgress.current}/{sealedProgress.required}
                       </div>
                     )}
                     {cloakedProgress && !cloakedProgress.unlocked && (
-                      <div className="inline-flex items-center gap-2 rounded-full border border-fuchsia-300/18 bg-fuchsia-400/10 px-3 py-1.5 text-xs uppercase tracking-[0.24em] text-fuchsia-100">
+                      <div className="inline-flex items-center gap-2 rounded-full border border-[var(--berry)]/35 bg-[color-mix(in_oklch,var(--berry)_16%,transparent)] px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-[var(--berry)]">
                         <Sparkles className="h-3.5 w-3.5" />
                         Cloaks {cloakedProgress.current}/{cloakedProgress.required}
                       </div>
                     )}
                     {spotlightProgress && !spotlightProgress.complete && (
-                      <div className="inline-flex items-center gap-2 rounded-full border border-lime-300/18 bg-lime-400/10 px-3 py-1.5 text-xs uppercase tracking-[0.24em] text-lime-100">
+                      <div className="inline-flex items-center gap-2 rounded-full border border-[var(--lemon)]/45 bg-[color-mix(in_oklch,var(--lemon)_24%,transparent)] px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-[var(--text-primary)]">
                         <Sparkles className="h-3.5 w-3.5" />
                         Spotlight {spotlightProgress.axis} {spotlightProgress.index + 1}:{" "}
                         {spotlightProgress.current}/{spotlightProgress.required}
                       </div>
                     )}
                     {session.toolLocked && (
-                      <div className="inline-flex items-center gap-2 rounded-full border border-amber-300/18 bg-amber-400/10 px-3 py-1.5 text-xs uppercase tracking-[0.24em] text-amber-200">
+                      <div className="inline-flex items-center gap-2 rounded-full border border-[var(--lemon)]/45 bg-[color-mix(in_oklch,var(--lemon)_22%,transparent)] px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-[var(--text-primary)]">
                         <ShieldAlert className="h-3.5 w-3.5" />
                         Start in select. Switch unlocks after matching a visible target
                       </div>
                     )}
                     {session.activeCommitment && (
-                      <div className="inline-flex items-center gap-2 rounded-full border border-sky-300/18 bg-sky-400/10 px-3 py-1.5 text-xs uppercase tracking-[0.24em] text-sky-100">
+                      <div className="inline-flex items-center gap-2 rounded-full border border-[var(--sky)]/35 bg-[color-mix(in_oklch,var(--sky)_16%,transparent)] px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-[var(--sky)]">
                         <Lock className="h-3.5 w-3.5" />
                         Locked to {session.activeCommitment.axis} {session.activeCommitment.index + 1}
                       </div>
                     )}
                     {session.noEchoLine && (
-                      <div className="inline-flex items-center gap-2 rounded-full border border-rose-300/18 bg-rose-400/10 px-3 py-1.5 text-xs uppercase tracking-[0.24em] text-rose-100">
+                      <div className="inline-flex items-center gap-2 rounded-full border border-[var(--danger)]/35 bg-[color-mix(in_oklch,var(--danger)_16%,transparent)] px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-[var(--danger)]">
                         <ShieldAlert className="h-3.5 w-3.5" />
                         Next off {session.noEchoLine.axis} {session.noEchoLine.index + 1}
                       </div>
                     )}
                     {puzzle.crossBlind && (
-                      <div className="inline-flex items-center gap-2 rounded-full border border-violet-300/18 bg-violet-400/10 px-3 py-1.5 text-xs uppercase tracking-[0.24em] text-violet-100">
+                      <div className="inline-flex items-center gap-2 rounded-full border border-[var(--berry)]/35 bg-[color-mix(in_oklch,var(--berry)_16%,transparent)] px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-[var(--berry)]">
                         <Sparkles className="h-3.5 w-3.5" />
                         {puzzle.crossBlind.hiddenAxis} axis blind:{" "}
                         {countMatchedTargetsOnAxis(
@@ -960,7 +960,7 @@ function App() {
                       </div>
                     )}
                     {factorCipherProgress && !factorCipherProgress.unlocked && (
-                      <div className="inline-flex items-center gap-2 rounded-full border border-teal-300/18 bg-teal-400/10 px-3 py-1.5 text-xs uppercase tracking-[0.24em] text-teal-100">
+                      <div className="inline-flex items-center gap-2 rounded-full border border-[var(--accent)]/35 bg-[var(--accent-soft)] px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-[var(--accent-strong)]">
                         <Sparkles className="h-3.5 w-3.5" />
                         Cipher {factorCipherProgress.current}/{factorCipherProgress.required}
                       </div>
@@ -969,7 +969,7 @@ function App() {
 
                   <div className="mx-auto w-full max-w-3xl">
                     <div className="grid gap-1.5 sm:gap-3" style={boardStyle}>
-                      <div className="rounded-2xl border border-dashed border-[var(--panel-border)] bg-[var(--panel-muted)]/60" />
+                      <div className="rounded-[1rem] border border-dashed border-[var(--panel-border)] bg-[var(--panel-muted)]/60 sm:rounded-[1.15rem]" />
 
                       {puzzle.colTargets.map((_, col) => {
                         const resolved = isColResolved(
@@ -1035,8 +1035,8 @@ function App() {
                 </div>
 
                 <div className="space-y-4">
-                  <div className="rounded-[1.75rem] border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
-                    <p className="text-xs uppercase tracking-[0.34em] text-[var(--text-muted)]">
+                  <div className="rounded-[1.75rem] border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4 shadow-[inset_0_1px_0_color-mix(in_oklch,var(--surface)_55%,transparent)]">
+                    <p className="text-xs font-black uppercase tracking-[0.24em] text-[var(--text-muted)]">
                       Tools
                     </p>
                     <div className="mt-3 grid grid-cols-2 gap-3">
@@ -1069,9 +1069,9 @@ function App() {
                     </div>
                   </div>
 
-                  <div className="rounded-[1.75rem] border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
+                  <div className="rounded-[1.75rem] border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4 shadow-[inset_0_1px_0_color-mix(in_oklch,var(--surface)_55%,transparent)]">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-xs uppercase tracking-[0.34em] text-[var(--text-muted)]">
+                      <p className="text-xs font-black uppercase tracking-[0.24em] text-[var(--text-muted)]">
                         Modifier Stack
                       </p>
                       <span className="text-xs text-[var(--text-secondary)]">
@@ -1080,34 +1080,34 @@ function App() {
                     </div>
                     <div className="mt-3 space-y-3">
                       {puzzle.modifiers.length === 0 && (
-                        <div className="rounded-[1.2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] px-4 py-3 text-sm text-[var(--text-secondary)]">
+                        <div className="rounded-[1.2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] px-4 py-3 text-sm font-medium text-[var(--text-secondary)] shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_35%,transparent)]">
                           Classic training board. No extra rules yet.
                         </div>
                       )}
                       {teachingModifiers.map((modifier) => (
                         <div
                           key={`tip-${modifier.id}`}
-                          className="rounded-[1.2rem] border border-sky-300/20 bg-sky-400/10 px-4 py-3"
+                          className="rounded-[1.2rem] border border-[var(--sky)]/35 bg-[color-mix(in_oklch,var(--sky)_14%,transparent)] px-4 py-3"
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div>
-                              <div className="text-xs uppercase tracking-[0.24em] text-sky-100/80">
+                              <div className="text-xs font-black uppercase tracking-[0.18em] text-[var(--sky)]">
                                 New rule
                               </div>
-                              <h2 className="mt-1 text-sm font-semibold text-sky-50">
+                              <h2 className="mt-1 text-sm font-black text-[var(--text-primary)]">
                                 {modifier.title}
                               </h2>
                             </div>
                             <HapticButton
                               type="button"
                               onClick={() => dismissModifierTip(modifier.id)}
-                              className="rounded-full border border-sky-200/15 bg-white/5 p-1 text-sky-50/70 transition hover:bg-white/10"
+                              className="rounded-full border border-[var(--sky)]/25 bg-[var(--panel-bg)]/55 p-1 text-[var(--sky)] transition hover:bg-[var(--panel-bg)]"
                               aria-label={`Dismiss ${modifier.title} tip`}
                             >
                               <X className="h-4 w-4" strokeWidth={1.8} />
                             </HapticButton>
                           </div>
-                          <p className="mt-2 text-sm text-sky-50/80">
+                          <p className="mt-2 text-sm text-[var(--text-secondary)]">
                             {modifier.description}
                           </p>
                         </div>
@@ -1115,7 +1115,7 @@ function App() {
                       {puzzle.modifiers.map((modifier) => (
                         <div
                           key={modifier.id}
-                          className="rounded-[1.2rem] border border-[var(--panel-border)] bg-[linear-gradient(180deg,rgba(255,255,255,0.05),transparent)] px-4 py-3"
+                          className="rounded-[1.2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] px-4 py-3 shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_35%,transparent)]"
                         >
                           <div className="flex items-center gap-2">
                             <Sparkles className="h-4 w-4 text-[var(--accent)]" />
@@ -1131,9 +1131,9 @@ function App() {
                     </div>
                   </div>
 
-                  <div className="rounded-[1.75rem] border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
+                  <div className="rounded-[1.75rem] border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4 shadow-[inset_0_1px_0_color-mix(in_oklch,var(--surface)_55%,transparent)]">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-xs uppercase tracking-[0.34em] text-[var(--text-muted)]">
+                      <p className="text-xs font-black uppercase tracking-[0.24em] text-[var(--text-muted)]">
                         Missions
                       </p>
                       <span className="text-xs text-[var(--text-secondary)]">
@@ -1151,8 +1151,8 @@ function App() {
                             key={mission.id}
                             className={`rounded-[1.2rem] border px-4 py-3 ${
                               completed
-                                ? "border-emerald-300/25 bg-emerald-500/10"
-                                : "border-[var(--panel-border)] bg-[var(--panel-bg)]"
+                                ? "border-[var(--success)]/35 bg-[color-mix(in_oklch,var(--success)_16%,transparent)]"
+                                : "border-[var(--panel-border)] bg-[var(--panel-bg)] shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_35%,transparent)]"
                             }`}
                           >
                             <div className="flex items-center justify-between gap-3">
@@ -1161,7 +1161,7 @@ function App() {
                               </h2>
                               {completed && (
                                 <CheckCircle2
-                                  className="h-4 w-4 text-emerald-300"
+                                  className="h-4 w-4 text-[var(--success)]"
                                   strokeWidth={1.8}
                                 />
                               )}
@@ -1175,14 +1175,14 @@ function App() {
                     </div>
                   </div>
 
-                  <div className="rounded-[1.75rem] border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4">
-                    <p className="text-xs uppercase tracking-[0.34em] text-[var(--text-muted)]">
+                  <div className="rounded-[1.75rem] border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4 shadow-[inset_0_1px_0_color-mix(in_oklch,var(--surface)_55%,transparent)]">
+                    <p className="text-xs font-black uppercase tracking-[0.24em] text-[var(--text-muted)]">
                       Chapter Progress
                     </p>
-                    <div className="mt-3 rounded-[1.2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] px-4 py-4">
+                    <div className="mt-3 rounded-[1.2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] px-4 py-4 shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_35%,transparent)]">
                       <div className="flex items-center justify-between gap-4">
                         <div>
-                          <div className="text-lg font-semibold text-[var(--text-primary)]">
+                          <div className="game-number text-lg font-black text-[var(--text-primary)]">
                             {progress[difficulty].clearedLevels} levels cleared
                           </div>
                           <div className="mt-1 text-sm text-[var(--text-secondary)]">
@@ -1210,9 +1210,9 @@ function App() {
                         </div>
                       </div>
                       {nextLockedDifficulty && (
-                        <div className="mt-4 h-2 rounded-full bg-black/15">
+                        <div className="mt-4 h-2 rounded-full bg-[color-mix(in_oklch,var(--panel-border)_65%,transparent)]">
                           <div
-                            className="h-full rounded-full bg-[var(--accent)]"
+                            className="h-full rounded-full bg-[var(--accent)] shadow-[0_0_14px_var(--glow-primary)]"
                             style={{
                               width: `${Math.min(
                                 100,
@@ -1232,10 +1232,10 @@ function App() {
         </section>
 
         {(isPending || session.status !== "playing") && (
-          <div className="pointer-events-none fixed inset-x-0 bottom-4 mx-auto flex w-fit max-w-[90vw] items-center gap-3 rounded-full border border-[var(--panel-border)] bg-[var(--panel-bg)]/95 px-4 py-3 text-sm text-[var(--text-primary)] shadow-[0_18px_48px_rgba(0,0,0,0.25)] backdrop-blur">
+          <div className="pointer-events-none fixed inset-x-0 bottom-4 mx-auto flex w-fit max-w-[90vw] items-center gap-3 rounded-full border border-[var(--panel-border)] bg-[var(--panel-bg)]/95 px-4 py-3 text-sm font-bold text-[var(--text-primary)] shadow-[0_18px_48px_var(--shadow-board)] backdrop-blur">
             {isPending && <span>Generating a fresh challenge board...</span>}
             {!isPending && session.status === "won" && (
-              <span>Chapter cleared. Your reward summary is ready.</span>
+              <span>Clean solve. Your reward summary is ready.</span>
             )}
             {!isPending && session.status === "lost" && (
               <span>Out of hearts. Retry this board or roll a fresh layout.</span>
@@ -1244,13 +1244,13 @@ function App() {
         )}
 
         {session.status === "lost" && (
-          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm">
-            <div className="w-full max-w-sm rounded-[2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] p-6 text-center shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-rose-400/25 bg-rose-500/12 text-rose-400">
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-[oklch(15%_0.02_230/0.5)] p-4 backdrop-blur-sm">
+            <div className="dialog-surface w-full max-w-sm rounded-[2rem] border border-[var(--panel-border)] p-6 text-center shadow-[0_24px_80px_var(--shadow-board)]">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-[var(--danger)]/35 bg-[color-mix(in_oklch,var(--danger)_16%,transparent)] text-[var(--danger)]">
                 <Heart className="h-6 w-6 fill-current" strokeWidth={1.8} />
               </div>
-              <h2 className="mt-4 text-2xl font-semibold text-[var(--text-primary)]">
-                You lost
+              <h2 className="mt-4 text-3xl font-black text-[var(--text-primary)]">
+                Out of hearts
               </h2>
               <p className="mt-2 text-sm text-[var(--text-secondary)]">
                 This chapter uses pressure as part of the puzzle. Reset and try a cleaner line.
@@ -1259,14 +1259,14 @@ function App() {
                 <HapticButton
                   type="button"
                   onClick={retryLevel}
-                  className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] px-4 py-3 text-sm font-semibold text-[var(--text-primary)] transition hover:-translate-y-0.5"
+                  className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] px-4 py-3 text-sm font-black text-[var(--text-primary)] shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_45%,transparent)] transition hover:-translate-y-0.5"
                 >
                   Retry
                 </HapticButton>
                 <HapticButton
                   type="button"
                   onClick={rerollLevel}
-                  className="rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(247,122,168,0.3)] transition hover:-translate-y-0.5"
+                  className="rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-black text-[var(--cell-highlight-text)] shadow-[0_12px_30px_var(--glow-primary)] transition hover:-translate-y-0.5"
                 >
                   New board
                 </HapticButton>
@@ -1276,12 +1276,12 @@ function App() {
         )}
 
         {unlockDialogOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm">
-            <div className="w-full max-w-sm rounded-[2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] p-6 text-center shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-amber-300/25 bg-amber-400/12 text-amber-300">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-[oklch(15%_0.02_230/0.5)] p-4 backdrop-blur-sm">
+            <div className="dialog-surface w-full max-w-sm rounded-[2rem] border border-[var(--panel-border)] p-6 text-center shadow-[0_24px_80px_var(--shadow-board)]">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-[var(--lemon)]/50 bg-[color-mix(in_oklch,var(--lemon)_30%,transparent)] text-[var(--text-primary)]">
                 <Sparkles className="h-6 w-6" strokeWidth={1.8} />
               </div>
-              <h2 className="mt-4 text-2xl font-semibold text-[var(--text-primary)]">
+              <h2 className="mt-4 text-3xl font-black text-[var(--text-primary)]">
                 All chapters unlocked
               </h2>
               <p className="mt-2 text-sm text-[var(--text-secondary)]">
@@ -1290,7 +1290,7 @@ function App() {
               <HapticButton
                 type="button"
                 onClick={() => setUnlockDialogOpen(false)}
-                className="mt-6 w-full rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(247,122,168,0.3)] transition hover:-translate-y-0.5"
+                className="mt-6 w-full rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-black text-[var(--cell-highlight-text)] shadow-[0_12px_30px_var(--glow-primary)] transition hover:-translate-y-0.5"
               >
                 Nice
               </HapticButton>
@@ -1299,26 +1299,26 @@ function App() {
         )}
 
         {session.status === "won" && (
-          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm">
-            <div className="w-full max-w-lg rounded-[2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-emerald-400/25 bg-emerald-500/12 text-emerald-400">
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-[oklch(15%_0.02_230/0.5)] p-4 backdrop-blur-sm">
+            <div className="dialog-surface w-full max-w-lg rounded-[2rem] border border-[var(--panel-border)] p-6 shadow-[0_24px_80px_var(--shadow-board)]">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-[var(--success)]/35 bg-[color-mix(in_oklch,var(--success)_18%,transparent)] text-[var(--success)]">
                 <CheckCircle2 className="h-6 w-6" strokeWidth={1.8} />
               </div>
-              <h2 className="mt-4 text-center text-2xl font-semibold text-[var(--text-primary)]">
+              <h2 className="mt-4 text-center text-3xl font-black text-[var(--text-primary)]">
                 Level cleared
               </h2>
               <p className="mt-2 text-center text-sm text-[var(--text-secondary)]">
                 {puzzle.chapter} rewards clean solves and disciplined clue use.
               </p>
 
-              <div className="mt-6 rounded-[1.5rem] border border-[var(--panel-border)] bg-[var(--panel-muted)] p-5">
+              <div className="mt-6 rounded-[1.5rem] border border-[var(--panel-border)] bg-[var(--panel-muted)] p-5 shadow-[inset_0_1px_0_color-mix(in_oklch,var(--surface)_55%,transparent)]">
                 <div className="flex items-center justify-center gap-2">
                   {Array.from({ length: 3 }, (_, index) => (
                     <Star
                       key={index}
                       className={`h-7 w-7 ${
                         index < (getLevelResult(progress, difficulty, puzzle.level)?.stars ?? 0)
-                          ? "fill-amber-300 text-amber-300"
+                          ? "fill-[var(--lemon)] text-[var(--lemon)]"
                           : "text-[var(--panel-border)]"
                       }`}
                       strokeWidth={1.8}
@@ -1326,27 +1326,27 @@ function App() {
                   ))}
                 </div>
                 <div className="mt-5 grid grid-cols-3 gap-2 sm:gap-3">
-                  <div className="rounded-[1.2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] px-2 py-2.5 text-center sm:px-4 sm:py-3">
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-muted)] sm:text-xs sm:tracking-[0.26em]">
+                  <div className="rounded-[1.2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] px-2 py-2.5 text-center shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_35%,transparent)] sm:px-4 sm:py-3">
+                    <div className="text-[10px] font-black uppercase tracking-[0.16em] text-[var(--text-muted)] sm:text-xs sm:tracking-[0.22em]">
                       Hearts
                     </div>
-                    <div className="mt-1.5 text-xl font-semibold text-[var(--text-primary)] sm:mt-2 sm:text-2xl">
+                    <div className="game-number mt-1.5 text-xl font-black text-[var(--text-primary)] sm:mt-2 sm:text-2xl">
                       {session.hearts}/{session.maxHearts}
                     </div>
                   </div>
-                  <div className="rounded-[1.2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] px-2 py-2.5 text-center sm:px-4 sm:py-3">
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-muted)] sm:text-xs sm:tracking-[0.26em]">
+                  <div className="rounded-[1.2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] px-2 py-2.5 text-center shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_35%,transparent)] sm:px-4 sm:py-3">
+                    <div className="text-[10px] font-black uppercase tracking-[0.16em] text-[var(--text-muted)] sm:text-xs sm:tracking-[0.22em]">
                       Hints
                     </div>
-                    <div className="mt-1.5 text-xl font-semibold text-[var(--text-primary)] sm:mt-2 sm:text-2xl">
+                    <div className="game-number mt-1.5 text-xl font-black text-[var(--text-primary)] sm:mt-2 sm:text-2xl">
                       {session.hintsUsed}
                     </div>
                   </div>
-                  <div className="rounded-[1.2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] px-2 py-2.5 text-center sm:px-4 sm:py-3">
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-[var(--text-muted)] sm:text-xs sm:tracking-[0.26em]">
+                  <div className="rounded-[1.2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] px-2 py-2.5 text-center shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_35%,transparent)] sm:px-4 sm:py-3">
+                    <div className="text-[10px] font-black uppercase tracking-[0.16em] text-[var(--text-muted)] sm:text-xs sm:tracking-[0.22em]">
                       Mistakes
                     </div>
-                    <div className="mt-1.5 text-xl font-semibold text-[var(--text-primary)] sm:mt-2 sm:text-2xl">
+                    <div className="game-number mt-1.5 text-xl font-black text-[var(--text-primary)] sm:mt-2 sm:text-2xl">
                       {session.mistakes}
                     </div>
                   </div>
@@ -1364,7 +1364,7 @@ function App() {
                         key={mission.id}
                         className={`flex items-center justify-between rounded-[1.1rem] border px-4 py-3 ${
                           completed
-                            ? "border-emerald-300/25 bg-emerald-500/10"
+                            ? "border-[var(--success)]/35 bg-[color-mix(in_oklch,var(--success)_16%,transparent)]"
                             : "border-[var(--panel-border)] bg-[var(--panel-bg)]"
                         }`}
                       >
@@ -1378,7 +1378,7 @@ function App() {
                         </div>
                         {completed ? (
                           <CheckCircle2
-                            className="h-5 w-5 text-emerald-300"
+                            className="h-5 w-5 text-[var(--success)]"
                             strokeWidth={1.8}
                           />
                         ) : (
@@ -1396,14 +1396,14 @@ function App() {
                 <HapticButton
                   type="button"
                   onClick={retryLevel}
-                  className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] px-4 py-3 text-sm font-semibold text-[var(--text-primary)] transition hover:-translate-y-0.5"
+                  className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] px-4 py-3 text-sm font-black text-[var(--text-primary)] shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_45%,transparent)] transition hover:-translate-y-0.5"
                 >
                   Replay same board
                 </HapticButton>
                 <HapticButton
                   type="button"
                   onClick={moveToNextLevel}
-                  className="rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(247,122,168,0.3)] transition hover:-translate-y-0.5"
+                  className="rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-black text-[var(--cell-highlight-text)] shadow-[0_12px_30px_var(--glow-primary)] transition hover:-translate-y-0.5"
                 >
                   Next level
                 </HapticButton>

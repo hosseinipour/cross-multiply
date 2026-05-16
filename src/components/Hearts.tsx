@@ -12,9 +12,9 @@ export function Hearts({
       {Array.from({ length: maxHearts }, (_, index) => (
         <span
           key={index}
-          className={`flex h-8 w-8 items-center justify-center rounded-full border ${
+          className={`flex h-8 w-8 items-center justify-center rounded-full border transition ${
             index < hearts
-              ? "border-rose-400/30 bg-rose-400/15 text-rose-400"
+              ? "border-[var(--berry)]/35 bg-[color-mix(in_oklch,var(--berry)_18%,transparent)] text-[var(--berry)] shadow-[0_6px_14px_var(--shadow-soft)]"
               : "border-[var(--panel-border)] bg-[var(--panel-muted)] text-[var(--text-faint)]"
           }`}
         >

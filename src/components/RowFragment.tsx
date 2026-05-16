@@ -108,26 +108,26 @@ function RowFragmentImpl({
             onClick={() => onPress(row, col)}
             disabled={mark !== "hidden" || blocked}
             haptic="none"
-            className={`group relative aspect-square rounded-[0.9rem] border text-center transition duration-200 disabled:cursor-default sm:rounded-[1.15rem] ${
+            className={`group game-number relative aspect-square rounded-[1rem] border text-center transition duration-200 disabled:cursor-default sm:rounded-[1.25rem] ${
               mark === "selected"
-                ? "border-[var(--cell-highlight-border)] [background:var(--cell-highlight)] text-[var(--cell-highlight-text)] shadow-[0_0_0_2px_rgba(255,255,255,0.15)]"
+                ? "border-[var(--cell-highlight-border)] [background:var(--cell-highlight)] text-[var(--cell-highlight-text)] shadow-[inset_0_-5px_0_color-mix(in_oklch,var(--accent-strong)_42%,transparent),0_14px_26px_var(--shadow-board)] [animation:goodPop_180ms_ease-out]"
                 : mark === "erased"
-                  ? "border-[var(--cell-erased-border)] bg-[var(--cell-erased)] text-[var(--text-faint)]"
+                  ? "border-[var(--cell-erased-border)] bg-[var(--cell-erased)] text-[var(--text-faint)] shadow-[inset_0_2px_0_color-mix(in_oklch,var(--surface)_32%,transparent)]"
                   : blocked
                     ? cloaked
-                      ? "border-dashed border-fuchsia-300/35 bg-fuchsia-400/10 text-fuchsia-100 opacity-80"
+                      ? "border-dashed border-[var(--berry)]/45 bg-[color-mix(in_oklch,var(--berry)_15%,transparent)] text-[var(--berry)] opacity-80"
                       : sealed
-                        ? "border-dashed border-cyan-300/35 bg-cyan-400/10 text-cyan-100 opacity-80"
+                        ? "border-dashed border-[var(--sky)]/45 bg-[color-mix(in_oklch,var(--sky)_15%,transparent)] text-[var(--sky)] opacity-80"
                         : "border-[var(--cell-border)] bg-[var(--panel-muted)]/50 text-[var(--text-faint)] opacity-45"
-                    : "border-[var(--cell-border)] bg-[var(--cell-bg)] text-[var(--text-primary)] hover:-translate-y-0.5 hover:border-[var(--accent)]/40 hover:bg-[var(--cell-hover)]"
-            } ${locked ? "shadow-[inset_0_0_0_1px_rgba(250,204,21,0.45)]" : ""} ${
+                    : "border-[var(--cell-border)] bg-[var(--cell-bg)] text-[var(--text-primary)] shadow-[inset_0_-4px_0_color-mix(in_oklch,var(--cell-border)_40%,transparent),0_9px_18px_var(--shadow-soft)] hover:-translate-y-1 hover:border-[var(--accent)]/60 hover:bg-[var(--cell-hover)] active:translate-y-0 active:shadow-[inset_0_2px_0_color-mix(in_oklch,var(--cell-border)_34%,transparent)]"
+            } ${locked ? "ring-2 ring-[var(--lemon)]/60" : ""} ${
               spotlightLine && !blockedBySpotlight
-                ? "ring-2 ring-lime-300/45"
+                ? "outline outline-2 outline-offset-2 outline-[var(--lemon)]"
                 : ""
             } ${isPulse ? "animate-[pulse_0.45s_ease-out]" : ""}`}
           >
             <span
-              className={`absolute inset-0 rounded-[0.85rem] sm:rounded-[1.1rem] ${
+              className={`absolute inset-0 rounded-[0.95rem] sm:rounded-[1.2rem] ${
                 mark === "selected"
                   ? "ring-2 ring-[var(--cell-highlight-ring)]"
                   : mark === "erased"
@@ -136,27 +136,27 @@ function RowFragmentImpl({
               }`}
             />
             <span
-              className={`relative z-10 flex h-full items-center justify-center font-['Trebuchet_MS'] text-[clamp(1rem,2.5vw,2rem)] font-semibold sm:text-[clamp(1.2rem,3vw,2rem)] ${
+              className={`relative z-10 flex h-full items-center justify-center text-[clamp(1rem,2.5vw,2rem)] font-black sm:text-[clamp(1.2rem,3vw,2rem)] ${
                 mark === "erased" ? "opacity-35" : ""
               }`}
             >
               {cloaked ? "?" : puzzle.board[row][col]}
             </span>
             {locked && (
-              <span className="absolute left-2 top-2 rounded-full bg-amber-300/20 px-1.5 py-0.5 text-[0.45rem] font-semibold uppercase tracking-[0.2em] text-amber-100">
+              <span className="absolute left-2 top-2 rounded-full bg-[var(--lemon)] px-1.5 py-0.5 text-[0.45rem] font-black uppercase tracking-[0.2em] text-[var(--fg)]">
                 Lock
               </span>
             )}
             {isMiss && (
-              <span className="pointer-events-none absolute inset-0 rounded-[0.85rem] bg-rose-500/28 opacity-0 ring-2 ring-rose-300/70 [animation:wrongFlash_500ms_ease-out_forwards] sm:rounded-[1.1rem]" />
+              <span className="pointer-events-none absolute inset-0 rounded-[0.95rem] bg-[var(--danger)]/28 opacity-0 ring-2 ring-[var(--danger)]/70 [animation:wrongFlash_500ms_ease-out_forwards] sm:rounded-[1.2rem]" />
             )}
             {sealed && mark === "hidden" && (
-              <span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[0.45rem] uppercase tracking-[0.22em] text-cyan-100/70">
+              <span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[0.45rem] uppercase tracking-[0.22em] text-[var(--sky)]/80">
                 Seal
               </span>
             )}
             {cloaked && mark === "hidden" && (
-              <span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[0.45rem] uppercase tracking-[0.22em] text-fuchsia-100/70">
+              <span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[0.45rem] uppercase tracking-[0.22em] text-[var(--berry)]/80">
                 Cloak
               </span>
             )}
@@ -177,7 +177,7 @@ function RowFragmentImpl({
             )}
             {mark === "erased" && (
               <span className="absolute inset-0 flex items-center justify-center text-[var(--text-muted)]">
-                <span className="h-0.5 w-8 rotate-[-28deg] rounded-full bg-current opacity-70" />
+                <span className="h-1 w-8 rotate-[-28deg] rounded-full bg-current opacity-70" />
               </span>
             )}
           </HapticButton>

@@ -28,59 +28,105 @@
 }
 
 :root {
-  color-scheme: dark;
-  --app-bg: #090b13;
-  --panel-bg: rgba(14, 18, 33, 0.86);
-  --panel-muted: rgba(22, 26, 46, 0.95);
-  --panel-border: rgba(147, 157, 194, 0.18);
-  --board-shell: rgba(9, 13, 25, 0.9);
-  --cell-bg: #0b0e18;
-  --cell-hover: #13182a;
-  --cell-border: rgba(110, 122, 165, 0.28);
-  --cell-highlight: linear-gradient(180deg, #28314c 0%, #151d35 100%);
-  --cell-highlight-border: rgba(255, 255, 255, 0.92);
-  --cell-highlight-ring: rgba(255, 255, 255, 0.7);
-  --cell-highlight-text: #ffffff;
-  --cell-erased: rgba(44, 49, 72, 0.9);
-  --cell-erased-border: rgba(126, 136, 170, 0.18);
-  --target-bg: rgba(44, 49, 72, 0.96);
-  --target-border: rgba(132, 142, 182, 0.18);
-  --text-primary: #f6f4fb;
-  --text-secondary: rgba(237, 237, 244, 0.78);
-  --text-muted: rgba(178, 184, 212, 0.72);
-  --text-faint: rgba(136, 143, 170, 0.7);
-  --accent: #f77aa8;
-  --accent-soft: rgba(247, 122, 168, 0.14);
-  --glow-primary: rgba(247, 122, 168, 0.18);
-  --glow-secondary: rgba(101, 129, 255, 0.18);
+  color-scheme: light;
+  --bg: oklch(98% 0.004 240);
+  --surface: oklch(100% 0 0);
+  --fg: oklch(20% 0.02 240);
+  --muted: oklch(50% 0.018 240);
+  --border: oklch(90% 0.006 240);
+  --accent: oklch(56% 0.12 170);
+
+  --font-display: 'Söhne', 'Avenir Next', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
+
+  --app-bg: oklch(96% 0.025 191);
+  --panel-bg: color-mix(in oklch, var(--surface) 88%, oklch(92% 0.055 180));
+  --panel-muted: color-mix(in oklch, var(--surface) 72%, oklch(88% 0.07 175));
+  --panel-border: color-mix(in oklch, var(--border) 72%, oklch(72% 0.06 185));
+  --board-shell: color-mix(in oklch, var(--surface) 82%, oklch(88% 0.075 185));
+  --cell-bg: oklch(99% 0.012 172);
+  --cell-hover: oklch(95% 0.035 170);
+  --cell-border: oklch(82% 0.045 180);
+  --cell-highlight: linear-gradient(180deg, oklch(72% 0.14 169) 0%, oklch(58% 0.14 174) 100%);
+  --cell-highlight-border: oklch(90% 0.08 160);
+  --cell-highlight-ring: oklch(84% 0.11 165 / 0.72);
+  --cell-highlight-text: oklch(18% 0.035 185);
+  --cell-erased: oklch(89% 0.018 235);
+  --cell-erased-border: oklch(78% 0.025 235);
+  --target-bg: oklch(97% 0.028 92);
+  --target-border: oklch(83% 0.08 92);
+  --text-primary: var(--fg);
+  --text-secondary: oklch(38% 0.028 235);
+  --text-muted: var(--muted);
+  --text-faint: oklch(62% 0.022 235);
+  --accent-strong: oklch(43% 0.12 172);
+  --accent-soft: oklch(91% 0.065 170);
+  --accent-pop: oklch(69% 0.17 45);
+  --berry: oklch(61% 0.18 346);
+  --lemon: oklch(86% 0.14 92);
+  --sky: oklch(72% 0.13 225);
+  --success: oklch(60% 0.13 153);
+  --danger: oklch(60% 0.18 24);
+  --shadow-soft: oklch(45% 0.04 205 / 0.18);
+  --shadow-board: oklch(45% 0.04 205 / 0.24);
+  --glow-primary: oklch(76% 0.16 168 / 0.24);
+  --glow-secondary: oklch(78% 0.15 72 / 0.18);
 }
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --app-bg: #f5efe7;
-  --panel-bg: rgba(255, 251, 246, 0.88);
-  --panel-muted: rgba(245, 238, 228, 0.96);
-  --panel-border: rgba(116, 96, 88, 0.15);
-  --board-shell: rgba(250, 246, 240, 0.94);
-  --cell-bg: #fffdfa;
-  --cell-hover: #f8f0e7;
-  --cell-border: rgba(126, 105, 94, 0.18);
-  --cell-highlight: linear-gradient(180deg, #e7d7d8 0%, #dccbcd 100%);
-  --cell-highlight-border: rgba(198, 165, 171, 0.55);
-  --cell-highlight-ring: rgba(255, 248, 250, 0.82);
-  --cell-highlight-text: #2b2434;
-  --cell-erased: rgba(231, 222, 213, 0.9);
-  --cell-erased-border: rgba(145, 127, 117, 0.18);
-  --target-bg: rgba(233, 224, 214, 0.92);
-  --target-border: rgba(126, 105, 94, 0.14);
-  --text-primary: #1f1f2d;
-  --text-secondary: rgba(42, 34, 52, 0.76);
-  --text-muted: rgba(92, 79, 93, 0.68);
-  --text-faint: rgba(128, 110, 123, 0.66);
-  --accent: #d75b88;
-  --accent-soft: rgba(215, 91, 136, 0.14);
-  --glow-primary: rgba(215, 91, 136, 0.16);
-  --glow-secondary: rgba(106, 141, 255, 0.12);
+  --app-bg: oklch(96% 0.025 191);
+  --panel-bg: color-mix(in oklch, var(--surface) 88%, oklch(92% 0.055 180));
+  --panel-muted: color-mix(in oklch, var(--surface) 72%, oklch(88% 0.07 175));
+  --panel-border: color-mix(in oklch, var(--border) 72%, oklch(72% 0.06 185));
+  --board-shell: color-mix(in oklch, var(--surface) 82%, oklch(88% 0.075 185));
+  --cell-bg: oklch(99% 0.012 172);
+  --cell-hover: oklch(95% 0.035 170);
+  --cell-border: oklch(82% 0.045 180);
+  --cell-highlight: linear-gradient(180deg, oklch(72% 0.14 169) 0%, oklch(58% 0.14 174) 100%);
+  --cell-highlight-border: oklch(90% 0.08 160);
+  --cell-highlight-ring: oklch(84% 0.11 165 / 0.72);
+  --cell-highlight-text: oklch(18% 0.035 185);
+  --cell-erased: oklch(89% 0.018 235);
+  --cell-erased-border: oklch(78% 0.025 235);
+  --target-bg: oklch(97% 0.028 92);
+  --target-border: oklch(83% 0.08 92);
+  --text-primary: var(--fg);
+  --text-secondary: oklch(38% 0.028 235);
+  --text-muted: var(--muted);
+  --text-faint: oklch(62% 0.022 235);
+  --accent-strong: oklch(43% 0.12 172);
+  --accent-soft: oklch(91% 0.065 170);
+  --glow-primary: oklch(76% 0.16 168 / 0.24);
+  --glow-secondary: oklch(78% 0.15 72 / 0.18);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --app-bg: oklch(21% 0.035 232);
+  --panel-bg: oklch(25% 0.034 231 / 0.94);
+  --panel-muted: oklch(29% 0.036 231 / 0.96);
+  --panel-border: oklch(45% 0.035 224 / 0.55);
+  --board-shell: oklch(23% 0.04 232 / 0.96);
+  --cell-bg: oklch(28% 0.042 230);
+  --cell-hover: oklch(33% 0.052 218);
+  --cell-border: oklch(47% 0.045 220);
+  --cell-highlight: linear-gradient(180deg, oklch(72% 0.14 169) 0%, oklch(57% 0.14 174) 100%);
+  --cell-highlight-border: oklch(86% 0.08 160);
+  --cell-highlight-ring: oklch(78% 0.12 165 / 0.7);
+  --cell-highlight-text: oklch(16% 0.034 185);
+  --cell-erased: oklch(34% 0.026 235);
+  --cell-erased-border: oklch(45% 0.032 235);
+  --target-bg: oklch(35% 0.06 83);
+  --target-border: oklch(63% 0.09 88 / 0.65);
+  --text-primary: oklch(96% 0.01 220);
+  --text-secondary: oklch(82% 0.018 225);
+  --text-muted: oklch(68% 0.02 225);
+  --text-faint: oklch(58% 0.02 225);
+  --accent-strong: oklch(78% 0.13 168);
+  --accent-soft: oklch(40% 0.09 172 / 0.45);
+  --glow-primary: oklch(68% 0.15 168 / 0.22);
+  --glow-secondary: oklch(76% 0.16 72 / 0.16);
 }
 
 @layer base {
@@ -98,14 +144,35 @@
     min-width: 320px;
     overscroll-behavior-y: none;
     background:
-      radial-gradient(circle at top, rgba(255, 255, 255, 0.08), transparent 34%),
+      linear-gradient(155deg, var(--glow-secondary), transparent 32rem),
+      linear-gradient(335deg, var(--glow-primary), transparent 30rem),
       var(--app-bg);
     color: var(--text-primary);
-    font-family: "Aptos", "Segoe UI", sans-serif;
+    font-family: var(--font-body);
   }
 
   button {
     font: inherit;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+@layer utilities {
+  .game-number {
+    font-family: "Trebuchet MS", "Avenir Next", var(--font-display);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .puzzle-surface {
+    background:
+      linear-gradient(135deg, color-mix(in oklch, var(--panel-bg) 88%, var(--accent-soft)), var(--panel-bg)),
+      repeating-linear-gradient(45deg, transparent 0 18px, oklch(100% 0 0 / 0.16) 18px 19px);
+  }
+
+  .dialog-surface {
+    background:
+      linear-gradient(180deg, color-mix(in oklch, var(--accent-soft) 70%, transparent), transparent 16rem),
+      var(--panel-bg);
   }
 }
 
@@ -116,5 +183,29 @@
 
   100% {
     opacity: 0;
+  }
+}
+
+@keyframes goodPop {
+  0% {
+    transform: scale(0.92);
+  }
+
+  60% {
+    transform: scale(1.06);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
   }
 }
