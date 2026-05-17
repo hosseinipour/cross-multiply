@@ -1,5 +1,10 @@
 import { useEffect, useId, useRef, useState, useTransition } from "react";
-import type { ComponentProps, CSSProperties, ReactNode } from "react";
+import type {
+  ComponentProps,
+  CSSProperties,
+  KeyboardEvent,
+  ReactNode,
+} from "react";
 import {
   CheckCircle2,
   Eraser,
@@ -58,6 +63,7 @@ import {
 import { RowFragment } from "./components/RowFragment";
 import { ToolButton } from "./components/ToolButton";
 import {
+  MISSION_DETAILS,
   getDifficultyUnlockRequirement,
   getDifficultyUnlockSource,
   type MissionId,
@@ -72,6 +78,11 @@ type RunSummary = {
   maxHearts: number;
   hintsUsed: number;
   mistakes: number;
+};
+
+type WinOptions = {
+  runOverrides?: Partial<RunSummary>;
+  consumeHint?: boolean;
 };
 
 type LevelResult = {
@@ -118,8 +129,10 @@ const STORAGE_KEY = "cross-multiply-state-v2";
 const LEGACY_STORAGE_KEY = "cross-multiply-state";
 const STARTING_HINTS = 3;
 const MAX_HINT_STOCK = 10;
+const MAX_PROGRESS_LEVEL = 10000;
 const CHEAT_TOGGLE_COUNT = 10;
 const CHEAT_TOGGLE_WINDOW_MS = 4000;
+const MISSION_IDS = Object.keys(MISSION_DETAILS) as MissionId[];
 
 function createProgressState(): ProgressState {
   return Object.fromEntries(
@@ -157,6 +170,121 @@ function buildSessionFromPuzzle(puzzle: Puzzle): SessionState {
     activeCommitment: null,
     noEchoLine: null,
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function clampInteger(
+  value: unknown,
+  fallback: number,
+  min: number,
+  max = MAX_PROGRESS_LEVEL,
+) {
+  const parsed =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : Number.NaN;
+
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+
+  return Math.min(max, Math.max(min, Math.floor(parsed)));
+}
+
+function sanitizeRunSummary(value: unknown): RunSummary {
+  const run = isRecord(value) ? value : {};
+  const maxHearts = clampInteger(run.maxHearts, 3, 1, 99);
+
+  return {
+    heartsLeft: clampInteger(run.heartsLeft, maxHearts, 0, maxHearts),
+    maxHearts,
+    hintsUsed: clampInteger(run.hintsUsed, 0, 0, MAX_PROGRESS_LEVEL),
+    mistakes: clampInteger(run.mistakes, 0, 0, MAX_PROGRESS_LEVEL),
+  };
+}
+
+function sanitizeLevelResult(value: unknown): LevelResult | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const missionsCompleted = Array.isArray(value.missionsCompleted)
+    ? Array.from(
+        new Set(
+          value.missionsCompleted.filter(
+            (mission): mission is MissionId =>
+              typeof mission === "string" &&
+              MISSION_IDS.includes(mission as MissionId),
+          ),
+        ),
+      )
+    : [];
+
+  return {
+    stars: clampInteger(value.stars, 1, 1, 3),
+    missionsCompleted,
+    bestRun: sanitizeRunSummary(value.bestRun),
+  };
+}
+
+function sanitizeProgressState(
+  progressValue: unknown,
+  legacyUnlockedValue: unknown,
+): ProgressState {
+  const nextProgress = createProgressState();
+  const progressRecord = isRecord(progressValue) ? progressValue : null;
+  const legacyUnlocked = isRecord(legacyUnlockedValue)
+    ? legacyUnlockedValue
+    : null;
+
+  for (const id of DIFFICULTY_ORDER) {
+    const entry = progressRecord && isRecord(progressRecord[id])
+      ? progressRecord[id]
+      : null;
+
+    const levelResultsRecord =
+      entry && isRecord(entry.levelResults) ? entry.levelResults : null;
+    const levelResults: Record<string, LevelResult> = {};
+
+    if (levelResultsRecord) {
+      for (const [levelKey, rawResult] of Object.entries(levelResultsRecord)) {
+        const level = clampInteger(levelKey, 0, 1);
+        const result = sanitizeLevelResult(rawResult);
+
+        if (level > 0 && result) {
+          levelResults[String(level)] = result;
+        }
+      }
+    }
+
+    const completedCount = Object.keys(levelResults).length;
+    const legacyHighest = legacyUnlocked
+      ? clampInteger(legacyUnlocked[id], 1, 1)
+      : 1;
+    const clearedLevels = entry
+      ? Math.max(clampInteger(entry.clearedLevels, completedCount, 0), completedCount)
+      : 0;
+    const highestUnlockedLevel = entry
+      ? clampInteger(
+          entry.highestUnlockedLevel,
+          Math.max(1, clearedLevels + 1, legacyHighest),
+          1,
+        )
+      : legacyHighest;
+
+    nextProgress[id] = {
+      clearedLevels,
+      highestUnlockedLevel: Math.max(highestUnlockedLevel, clearedLevels + 1),
+      levelResults,
+    };
+  }
+
+  return nextProgress;
 }
 
 function isDifficultyAvailable(progress: ProgressState, difficulty: DifficultyId) {
@@ -248,23 +376,7 @@ function loadPersistedState(): PersistedState {
       session?: { puzzle?: { level?: number } };
     };
 
-    const nextProgress = createProgressState();
-    if (parsed.progress) {
-      for (const id of DIFFICULTY_ORDER) {
-        nextProgress[id] = {
-          ...nextProgress[id],
-          ...parsed.progress[id],
-          levelResults: parsed.progress[id]?.levelResults ?? {},
-        };
-      }
-    } else if (parsed.unlocked) {
-      for (const id of DIFFICULTY_ORDER) {
-        nextProgress[id].highestUnlockedLevel = Math.max(
-          1,
-          parsed.unlocked[id] ?? 1,
-        );
-      }
-    }
+    const nextProgress = sanitizeProgressState(parsed.progress, parsed.unlocked);
 
     const preferredDifficulty =
       parsed.difficulty && parsed.difficulty in DIFFICULTIES
@@ -273,25 +385,24 @@ function loadPersistedState(): PersistedState {
     const difficulty = isDifficultyAvailable(nextProgress, preferredDifficulty)
       ? preferredDifficulty
       : "easy";
-    const level = Math.max(
-      1,
+    const level = clampInteger(
       parsed.session?.puzzle?.level ??
         nextProgress[difficulty].highestUnlockedLevel ??
         1,
+      nextProgress[difficulty].highestUnlockedLevel,
+      1,
+      nextProgress[difficulty].highestUnlockedLevel,
     );
 
     return {
-      theme: parsed.theme === "light" ? "light" : "dark",
+      theme: parsed.theme === "dark" ? "dark" : "light",
       difficulty,
       hintStock:
         typeof parsed.hintStock === "number"
           ? Math.max(0, Math.min(MAX_HINT_STOCK, parsed.hintStock))
           : STARTING_HINTS,
       progress: nextProgress,
-      session: buildSession(
-        difficulty,
-        Math.min(level, nextProgress[difficulty].highestUnlockedLevel),
-      ),
+      session: buildSession(difficulty, level),
       dismissedModifierTips: parsed.dismissedModifierTips ?? {},
       onboardingDismissed: Boolean(parsed.onboardingDismissed),
     };
@@ -366,6 +477,67 @@ function isBetterRun(candidate: LevelResult, previous?: LevelResult) {
   return candidate.bestRun.hintsUsed < previous.bestRun.hintsUsed;
 }
 
+function applyWinResult(
+  current: PersistedState,
+  nextMarks: CellMark[][],
+  options?: WinOptions,
+): PersistedState {
+  const currentSession = current.session;
+  const currentPuzzle = currentSession.puzzle;
+  const currentDifficulty = current.difficulty;
+  const run: RunSummary = {
+    heartsLeft: options?.runOverrides?.heartsLeft ?? currentSession.hearts,
+    maxHearts: options?.runOverrides?.maxHearts ?? currentSession.maxHearts,
+    hintsUsed: options?.runOverrides?.hintsUsed ?? currentSession.hintsUsed,
+    mistakes: options?.runOverrides?.mistakes ?? currentSession.mistakes,
+  };
+  const missionsCompleted = evaluateMissions(
+    currentPuzzle,
+    run,
+    currentSession.eraseUsedBeforeRowsResolved,
+  );
+  const result: LevelResult = {
+    stars: computeStars(currentPuzzle, run),
+    missionsCompleted,
+    bestRun: run,
+  };
+  const nextProgress = { ...current.progress };
+  const currentDifficultyProgress = nextProgress[currentDifficulty];
+  const previous =
+    currentDifficultyProgress.levelResults[String(currentPuzzle.level)];
+  const levelResults = {
+    ...currentDifficultyProgress.levelResults,
+    [String(currentPuzzle.level)]: isBetterRun(result, previous)
+      ? result
+      : previous,
+  };
+  const clearedLevels = Object.keys(levelResults).length;
+
+  nextProgress[currentDifficulty] = {
+    ...currentDifficultyProgress,
+    levelResults,
+    clearedLevels,
+    highestUnlockedLevel: Math.max(
+      currentDifficultyProgress.highestUnlockedLevel,
+      currentPuzzle.level + 1,
+    ),
+  };
+
+  return {
+    ...current,
+    progress: nextProgress,
+    hintStock: options?.consumeHint
+      ? Math.max(0, current.hintStock - 1)
+      : current.hintStock,
+    session: {
+      ...currentSession,
+      marks: nextMarks,
+      hintsUsed: run.hintsUsed,
+      status: "won",
+    },
+  };
+}
+
 function getToolLockState(
   puzzle: Puzzle,
   marks: CellMark[][],
@@ -438,10 +610,10 @@ function StatusPill({
 }) {
   return (
     <div
-      className={`inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] ${statusPillToneClass[tone]}`}
+      className={`inline-flex min-h-8 max-w-full shrink-0 items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] ${statusPillToneClass[tone]}`}
     >
-      {icon}
-      {children}
+      <span className="shrink-0">{icon}</span>
+      <span className="min-w-0 truncate">{children}</span>
     </div>
   );
 }
@@ -463,11 +635,13 @@ function SidebarPanel({
       className="group rounded-[1.6rem] border border-[var(--panel-border)] bg-[var(--panel-muted)] p-3 shadow-[inset_0_1px_0_color-mix(in_oklch,var(--surface)_55%,transparent)] sm:rounded-[1.75rem] sm:p-4"
     >
       <summary className="flex min-h-9 cursor-pointer list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
-        <span className="text-xs font-black uppercase tracking-[0.24em] text-[var(--text-muted)]">
+        <span className="min-w-0 truncate text-xs font-black uppercase tracking-[0.24em] text-[var(--text-muted)]">
           {title}
         </span>
         {meta && (
-          <span className="text-xs text-[var(--text-secondary)]">{meta}</span>
+          <span className="min-w-0 truncate text-right text-xs text-[var(--text-secondary)]">
+            {meta}
+          </span>
         )}
       </summary>
       <div className="mt-3">{children}</div>
@@ -489,13 +663,60 @@ function DialogShell({
   title: string;
 }) {
   const titleId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const previousFocus =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    const firstFocusable = dialogRef.current?.querySelector<HTMLElement>(
+      'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    );
+
+    (firstFocusable ?? dialogRef.current)?.focus();
+
+    return () => {
+      previousFocus?.focus();
+    };
+  }, []);
+
+  const handleDialogKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Tab") {
+      return;
+    }
+
+    const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    );
+
+    if (!focusable?.length) {
+      event.preventDefault();
+      dialogRef.current?.focus();
+      return;
+    }
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-[oklch(15%_0.02_230/0.5)] p-3 py-6 backdrop-blur-sm sm:items-center sm:p-4">
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        tabIndex={-1}
+        onKeyDown={handleDialogKeyDown}
         className={`dialog-surface max-h-[calc(100vh-2rem)] w-full overflow-y-auto rounded-[2rem] border border-[var(--panel-border)] p-5 shadow-[0_24px_80px_var(--shadow-board)] sm:p-6 ${
           size === "lg" ? "max-w-lg" : "max-w-sm text-center"
         }`}
@@ -640,7 +861,8 @@ function MobileToolDock({
               type="button"
               onClick={() => onModeChange(tool.mode)}
               disabled={disabled}
-              className={`flex min-h-14 items-center justify-center gap-2 rounded-[1rem] border px-3 text-sm font-black transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50 ${
+              aria-pressed={active}
+              className={`flex min-h-14 min-w-0 items-center justify-center gap-2 rounded-[1rem] border px-3 text-sm font-black transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50 ${
                 active
                   ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text-primary)] shadow-[inset_0_-3px_0_color-mix(in_oklch,var(--accent)_28%,transparent)]"
                   : "border-[var(--panel-border)] bg-[var(--panel-muted)] text-[var(--text-secondary)] shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_45%,transparent)] active:translate-y-0.5"
@@ -655,7 +877,7 @@ function MobileToolDock({
               >
                 {tool.icon}
               </span>
-              <span>{tool.label}</span>
+              <span className="min-w-0 truncate">{tool.label}</span>
             </HapticButton>
           );
         })}
@@ -695,6 +917,10 @@ function App() {
   const nextUnlockProgress = nextUnlockSource
     ? progress[nextUnlockSource].clearedLevels
     : 0;
+  const nextUnlockPercent =
+    nextUnlockRequirement > 0
+      ? Math.min(100, (nextUnlockProgress / nextUnlockRequirement) * 100)
+      : 0;
   const teachingModifierIds: ModifierId[] = [
     "deepFog",
     "crossBlind",
@@ -729,8 +955,19 @@ function App() {
   const hintGateUnlocked = isHintGateUnlocked(puzzle, session.marks);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
+    if (typeof document !== "undefined") {
+      document.documentElement.dataset.theme = theme;
+    }
+
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
+    } catch {
+      // Private browsing, quota limits, and locked-down storage should not break play.
+    }
   }, [persisted, theme]);
 
   const setTheme = (nextTheme: ThemeMode) => {
@@ -868,65 +1105,9 @@ function App() {
 
   const finalizeWin = (
     nextMarks: CellMark[][],
-    options?: {
-      runOverrides?: Partial<RunSummary>;
-      consumeHint?: boolean;
-    },
+    options?: WinOptions,
   ) => {
-    const run: RunSummary = {
-      heartsLeft: options?.runOverrides?.heartsLeft ?? session.hearts,
-      maxHearts: options?.runOverrides?.maxHearts ?? session.maxHearts,
-      hintsUsed: options?.runOverrides?.hintsUsed ?? session.hintsUsed,
-      mistakes: options?.runOverrides?.mistakes ?? session.mistakes,
-    };
-    const missionsCompleted = evaluateMissions(
-      puzzle,
-      run,
-      session.eraseUsedBeforeRowsResolved,
-    );
-    const result: LevelResult = {
-      stars: computeStars(puzzle, run),
-      missionsCompleted,
-      bestRun: run,
-    };
-
-    setPersisted((current) => {
-      const nextProgress = { ...current.progress };
-      const currentDifficultyProgress = nextProgress[difficulty];
-      const previous =
-        currentDifficultyProgress.levelResults[String(current.session.puzzle.level)];
-      const levelResults = {
-        ...currentDifficultyProgress.levelResults,
-        [String(current.session.puzzle.level)]: isBetterRun(result, previous)
-          ? result
-          : previous,
-      };
-      const clearedLevels = Object.keys(levelResults).length;
-
-      nextProgress[difficulty] = {
-        ...currentDifficultyProgress,
-        levelResults,
-        clearedLevels,
-        highestUnlockedLevel: Math.max(
-          currentDifficultyProgress.highestUnlockedLevel,
-          current.session.puzzle.level + 1,
-        ),
-      };
-
-      return {
-        ...current,
-        progress: nextProgress,
-        hintStock: options?.consumeHint
-          ? Math.max(0, current.hintStock - 1)
-          : current.hintStock,
-        session: {
-          ...current.session,
-          marks: nextMarks,
-          hintsUsed: run.hintsUsed,
-          status: "won",
-        },
-      };
-    });
+    setPersisted((current) => applyWinResult(current, nextMarks, options));
   };
 
   const applyCorrectMark = (row: number, col: number, mark: CellMark) => {
@@ -1010,55 +1191,66 @@ function App() {
       return;
     }
 
-    const hint = revealHint(puzzle, session.marks, {
-      activeCommitment: session.activeCommitment,
-      noEchoLine: session.noEchoLine,
-    });
+    setPersisted((current) => {
+      const currentPuzzle = current.session.puzzle;
 
-    if (!hint) {
-      return;
-    }
+      if (
+        current.session.status !== "playing" ||
+        current.hintStock <= 0 ||
+        !isHintGateUnlocked(currentPuzzle, current.session.marks)
+      ) {
+        return current;
+      }
 
-    const nextMarks = session.marks.map((line) => [...line]);
-    nextMarks[hint.row][hint.col] = hint.mark;
-    const solved = isPuzzleSolved(puzzle, nextMarks);
-    const nextToolLocked = getToolLockState(puzzle, nextMarks, session.toolLocked);
-    const nextCommitment = getNextCommitment(
-      puzzle,
-      nextMarks,
-      session.activeCommitment,
-    );
-    const nextNoEchoLine = getNextNoEchoLine(
-      puzzle,
-      nextMarks,
-      session.noEchoLine,
-      hint.row,
-      hint.col,
-    );
-
-    if (solved) {
-      finalizeWin(nextMarks, {
-        runOverrides: {
-          hintsUsed: session.hintsUsed + 1,
-        },
-        consumeHint: true,
+      const hint = revealHint(currentPuzzle, current.session.marks, {
+        activeCommitment: current.session.activeCommitment,
+        noEchoLine: current.session.noEchoLine,
       });
-      return;
-    }
 
-    setPersisted((current) => ({
-      ...current,
-      hintStock: Math.max(0, current.hintStock - 1),
-      session: {
-        ...current.session,
-        marks: nextMarks,
-        hintsUsed: current.session.hintsUsed + 1,
-        focusKey: `${hint.row}-${hint.col}-hint-${Date.now()}`,
-        toolLocked: nextToolLocked,
-        activeCommitment: nextCommitment,
-        noEchoLine: nextNoEchoLine,
-      },
-    }));
+      if (!hint) {
+        return current;
+      }
+
+      const nextMarks = current.session.marks.map((line) => [...line]);
+      nextMarks[hint.row][hint.col] = hint.mark;
+
+      if (isPuzzleSolved(currentPuzzle, nextMarks)) {
+        return applyWinResult(current, nextMarks, {
+          runOverrides: {
+            hintsUsed: current.session.hintsUsed + 1,
+          },
+          consumeHint: true,
+        });
+      }
+
+      return {
+        ...current,
+        hintStock: Math.max(0, current.hintStock - 1),
+        session: {
+          ...current.session,
+          marks: nextMarks,
+          hintsUsed: current.session.hintsUsed + 1,
+          focusKey: `${hint.row}-${hint.col}-hint-${Date.now()}`,
+          toolLocked: getToolLockState(
+            currentPuzzle,
+            nextMarks,
+            current.session.toolLocked,
+          ),
+          activeCommitment: getNextCommitment(
+            currentPuzzle,
+            nextMarks,
+            current.session.activeCommitment,
+          ),
+          noEchoLine: getNextNoEchoLine(
+            currentPuzzle,
+            nextMarks,
+            current.session.noEchoLine,
+            hint.row,
+            hint.col,
+          ),
+        },
+      };
+    });
   };
 
   const boardColumnCount = size + 1;
@@ -1239,6 +1431,7 @@ function App() {
             type="button"
             onClick={() => changeDifficulty(id)}
             disabled={!unlocked}
+            aria-pressed={active}
             aria-label={
               unlocked
                 ? `${label} chapter, level ${progress[id].highestUnlockedLevel}`
@@ -1250,9 +1443,9 @@ function App() {
                 : "border-[var(--panel-border)] bg-[var(--panel-muted)] shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_45%,transparent)] hover:-translate-y-0.5 hover:border-[var(--accent)]/50 hover:bg-[var(--panel-bg)]"
             } ${!unlocked ? "cursor-not-allowed opacity-45" : ""}`}
           >
-            <div className="flex items-center gap-2 text-[0.66rem] font-black uppercase tracking-[0.18em] text-[var(--text-muted)] sm:text-xs sm:tracking-[0.24em]">
-              {!unlocked && <Lock className="h-3.5 w-3.5" />}
-              {label}
+            <div className="flex min-w-0 items-center gap-2 text-[0.66rem] font-black uppercase tracking-[0.18em] text-[var(--text-muted)] sm:text-xs sm:tracking-[0.24em]">
+              {!unlocked && <Lock className="h-3.5 w-3.5 shrink-0" />}
+              <span className="min-w-0 truncate">{label}</span>
             </div>
             <div className="game-number mt-1.5 text-base font-black text-[var(--text-primary)] sm:mt-2 sm:text-lg">
               Lv {progress[id].highestUnlockedLevel}
@@ -1642,11 +1835,7 @@ function App() {
                           <div
                             className="h-full rounded-full bg-[var(--accent)] shadow-[0_0_14px_var(--glow-primary)]"
                             style={{
-                              width: `${Math.min(
-                                100,
-                                (nextUnlockProgress / nextUnlockRequirement) *
-                                  100,
-                              )}%`,
+                              width: `${nextUnlockPercent}%`,
                             }}
                           />
                         </div>
