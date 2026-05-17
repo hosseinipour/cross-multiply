@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, useTransition } from "react";
-import type { CSSProperties } from "react";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
+import type { ComponentProps, CSSProperties, ReactNode } from "react";
 import {
   CheckCircle2,
   Eraser,
@@ -111,6 +111,7 @@ type PersistedState = {
   session: SessionState;
   progress: ProgressState;
   dismissedModifierTips: Partial<Record<ModifierId, boolean>>;
+  onboardingDismissed: boolean;
 };
 
 const STORAGE_KEY = "cross-multiply-state-v2";
@@ -226,6 +227,7 @@ function loadPersistedState(): PersistedState {
     progress,
     session: buildSession("easy", 1),
     dismissedModifierTips: {},
+    onboardingDismissed: false,
   };
 
   if (typeof window === "undefined") {
@@ -291,6 +293,7 @@ function loadPersistedState(): PersistedState {
         Math.min(level, nextProgress[difficulty].highestUnlockedLevel),
       ),
       dismissedModifierTips: parsed.dismissedModifierTips ?? {},
+      onboardingDismissed: Boolean(parsed.onboardingDismissed),
     };
   } catch {
     return fallback;
@@ -375,6 +378,292 @@ function getToolLockState(
   return !hasVisibleMatchedTarget(puzzle, marks);
 }
 
+const iconButtonClass =
+  "relative inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-[var(--panel-border)] bg-[var(--panel-muted)] p-3 text-[var(--text-primary)] shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_45%,transparent)] transition hover:-translate-y-0.5 hover:border-[var(--accent)]/50 hover:bg-[var(--accent-soft)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50";
+
+const secondaryActionClass =
+  "rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] px-4 py-3 text-sm font-black text-[var(--text-primary)] shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_45%,transparent)] transition hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]";
+
+const primaryActionClass =
+  "rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-black text-[var(--cell-highlight-text)] shadow-[0_12px_30px_var(--glow-primary)] transition hover:-translate-y-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-strong)]";
+
+const statusPillToneClass = {
+  neutral:
+    "border-[var(--panel-border)] bg-[var(--panel-muted)] text-[var(--text-secondary)] shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_35%,transparent)]",
+  lemon:
+    "border-[var(--lemon)]/45 bg-[color-mix(in_oklch,var(--lemon)_22%,transparent)] text-[var(--text-primary)]",
+  sky:
+    "border-[var(--sky)]/35 bg-[color-mix(in_oklch,var(--sky)_16%,transparent)] text-[var(--sky)]",
+  berry:
+    "border-[var(--berry)]/35 bg-[color-mix(in_oklch,var(--berry)_16%,transparent)] text-[var(--berry)]",
+  danger:
+    "border-[var(--danger)]/35 bg-[color-mix(in_oklch,var(--danger)_16%,transparent)] text-[var(--danger)]",
+  accent:
+    "border-[var(--accent)]/35 bg-[var(--accent-soft)] text-[var(--accent-strong)]",
+} as const;
+
+type StatusPillTone = keyof typeof statusPillToneClass;
+
+function IconActionButton({
+  children,
+  className = "",
+  title,
+  ...props
+}: {
+  children: ReactNode;
+} & ComponentProps<typeof HapticButton>) {
+  const fallbackTitle =
+    title ??
+    (typeof props["aria-label"] === "string" ? props["aria-label"] : undefined);
+
+  return (
+    <HapticButton
+      {...props}
+      title={fallbackTitle}
+      className={`${iconButtonClass} ${className}`}
+    >
+      {children}
+    </HapticButton>
+  );
+}
+
+function StatusPill({
+  children,
+  icon,
+  tone = "neutral",
+}: {
+  children: ReactNode;
+  icon: ReactNode;
+  tone?: StatusPillTone;
+}) {
+  return (
+    <div
+      className={`inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] ${statusPillToneClass[tone]}`}
+    >
+      {icon}
+      {children}
+    </div>
+  );
+}
+
+function SidebarPanel({
+  children,
+  defaultOpen = true,
+  meta,
+  title,
+}: {
+  children: ReactNode;
+  defaultOpen?: boolean;
+  meta?: ReactNode;
+  title: string;
+}) {
+  return (
+    <details
+      open={defaultOpen}
+      className="group rounded-[1.6rem] border border-[var(--panel-border)] bg-[var(--panel-muted)] p-3 shadow-[inset_0_1px_0_color-mix(in_oklch,var(--surface)_55%,transparent)] sm:rounded-[1.75rem] sm:p-4"
+    >
+      <summary className="flex min-h-9 cursor-pointer list-none items-center justify-between gap-3 [&::-webkit-details-marker]:hidden">
+        <span className="text-xs font-black uppercase tracking-[0.24em] text-[var(--text-muted)]">
+          {title}
+        </span>
+        {meta && (
+          <span className="text-xs text-[var(--text-secondary)]">{meta}</span>
+        )}
+      </summary>
+      <div className="mt-3">{children}</div>
+    </details>
+  );
+}
+
+function DialogShell({
+  actions,
+  children,
+  icon,
+  size = "sm",
+  title,
+}: {
+  actions?: ReactNode;
+  children: ReactNode;
+  icon: ReactNode;
+  size?: "sm" | "lg";
+  title: string;
+}) {
+  const titleId = useId();
+
+  return (
+    <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-[oklch(15%_0.02_230/0.5)] p-3 py-6 backdrop-blur-sm sm:items-center sm:p-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className={`dialog-surface max-h-[calc(100vh-2rem)] w-full overflow-y-auto rounded-[2rem] border border-[var(--panel-border)] p-5 shadow-[0_24px_80px_var(--shadow-board)] sm:p-6 ${
+          size === "lg" ? "max-w-lg" : "max-w-sm text-center"
+        }`}
+      >
+        {icon}
+        <h2
+          id={titleId}
+          className={`mt-4 text-3xl font-black text-[var(--text-primary)] ${
+            size === "lg" ? "text-center" : ""
+          }`}
+        >
+          {title}
+        </h2>
+        {children}
+        {actions && <div className="mt-6 grid gap-3 sm:grid-cols-2">{actions}</div>}
+      </div>
+    </div>
+  );
+}
+
+function ResultStat({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="rounded-[1.2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] px-2 py-2.5 text-center shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_35%,transparent)] sm:px-4 sm:py-3">
+      <div className="text-[10px] font-black uppercase tracking-[0.16em] text-[var(--text-muted)] sm:text-xs sm:tracking-[0.22em]">
+        {label}
+      </div>
+      <div className="game-number mt-1.5 text-xl font-black text-[var(--text-primary)] sm:mt-2 sm:text-2xl">
+        {value}
+      </div>
+    </div>
+  );
+}
+
+type FirstRunStage = "firstMark" | "firstLine" | "rhythm";
+
+function FirstRunCoach({
+  onDismiss,
+  stage,
+}: {
+  onDismiss: () => void;
+  stage: FirstRunStage;
+}) {
+  const stageCopy = {
+    firstMark: {
+      title: "Start with one edge target",
+      body: "Choose a row or column target. Select numbers in that line that multiply to it.",
+      action: "Hide guide",
+    },
+    firstLine: {
+      title: "Good mark. Complete the target",
+      body: "When your selected numbers multiply to the edge target, that line clears. Erase numbers that do not fit.",
+      action: "Got it",
+    },
+    rhythm: {
+      title: "You have the rhythm",
+      body: "Clear edge targets one by one. Use a hint when the next line stalls.",
+      action: "Got it",
+    },
+  } satisfies Record<
+    FirstRunStage,
+    { title: string; body: string; action: string }
+  >;
+  const current = stageCopy[stage];
+
+  return (
+    <div
+      aria-live="polite"
+      className="mb-4 w-full rounded-[1.35rem] border border-[var(--sky)]/35 bg-[color-mix(in_oklch,var(--sky)_12%,var(--panel-bg))] px-4 py-3 shadow-[inset_0_1px_0_color-mix(in_oklch,var(--surface)_45%,transparent)]"
+    >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="max-w-[65ch]">
+          <div className="text-[0.68rem] font-black uppercase tracking-[0.22em] text-[var(--sky)]">
+            First board
+          </div>
+          <h2 className="mt-1 text-base font-black text-[var(--text-primary)]">
+            {current.title}
+          </h2>
+          <p className="mt-1 text-sm leading-6 text-[var(--text-secondary)]">
+            {current.body}
+          </p>
+        </div>
+        <HapticButton
+          type="button"
+          onClick={onDismiss}
+          className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full border border-[var(--sky)]/35 bg-[var(--panel-bg)] px-4 text-xs font-black uppercase tracking-[0.18em] text-[var(--text-primary)] shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--sky)_18%,transparent)] transition hover:-translate-y-0.5 hover:bg-[var(--panel-muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--sky)]"
+          aria-label="Dismiss first board guide"
+        >
+          {current.action}
+        </HapticButton>
+      </div>
+
+      <div className="mt-3 grid gap-2 text-xs font-bold text-[var(--text-secondary)] sm:grid-cols-3">
+        <div className="flex min-h-11 items-center gap-2 rounded-full border border-[var(--panel-border)] bg-[var(--panel-bg)] px-3">
+          <CheckCircle2 className="h-4 w-4 text-[var(--accent)]" strokeWidth={1.8} />
+          Select factors
+        </div>
+        <div className="flex min-h-11 items-center gap-2 rounded-full border border-[var(--panel-border)] bg-[var(--panel-bg)] px-3">
+          <Eraser className="h-4 w-4 text-[var(--text-muted)]" strokeWidth={1.8} />
+          Erase extras
+        </div>
+        <div className="flex min-h-11 items-center gap-2 rounded-full border border-[var(--panel-border)] bg-[var(--panel-bg)] px-3">
+          <Lightbulb className="h-4 w-4 text-[var(--accent-pop)]" strokeWidth={1.8} />
+          Hint reveals one cell
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MobileToolDock({
+  mode,
+  onModeChange,
+  toolLocked,
+}: {
+  mode: ToolMode;
+  onModeChange: (mode: ToolMode) => void;
+  toolLocked: boolean;
+}) {
+  const tools: Array<{ icon: ReactNode; label: string; mode: ToolMode }> = [
+    {
+      icon: <Eraser className="h-5 w-5" strokeWidth={1.8} />,
+      label: "Erase",
+      mode: "erase",
+    },
+    {
+      icon: <CheckCircle2 className="h-5 w-5" strokeWidth={1.8} />,
+      label: "Select",
+      mode: "select",
+    },
+  ];
+
+  return (
+    <div className="fixed inset-x-3 bottom-3 z-30 rounded-[1.35rem] border border-[var(--panel-border)] bg-[var(--panel-bg)]/95 p-2 shadow-[0_18px_48px_var(--shadow-board)] backdrop-blur lg:hidden">
+      <div className="grid grid-cols-2 gap-2">
+        {tools.map((tool) => {
+          const active = mode === tool.mode;
+          const disabled = toolLocked && !active;
+
+          return (
+            <HapticButton
+              key={tool.mode}
+              type="button"
+              onClick={() => onModeChange(tool.mode)}
+              disabled={disabled}
+              className={`flex min-h-14 items-center justify-center gap-2 rounded-[1rem] border px-3 text-sm font-black transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] disabled:cursor-not-allowed disabled:opacity-50 ${
+                active
+                  ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text-primary)] shadow-[inset_0_-3px_0_color-mix(in_oklch,var(--accent)_28%,transparent)]"
+                  : "border-[var(--panel-border)] bg-[var(--panel-muted)] text-[var(--text-secondary)] shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_45%,transparent)] active:translate-y-0.5"
+              }`}
+            >
+              <span
+                className={`flex h-9 w-9 items-center justify-center rounded-full ${
+                  active
+                    ? "bg-[var(--accent)] text-[var(--cell-highlight-text)]"
+                    : "bg-[var(--panel-bg)] text-[var(--text-muted)]"
+                }`}
+              >
+                {tool.icon}
+              </span>
+              <span>{tool.label}</span>
+            </HapticButton>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [persisted, setPersisted] = useState<PersistedState>(() =>
     loadPersistedState(),
@@ -383,7 +672,15 @@ function App() {
   const [isPending, startTransition] = useTransition();
   const themeToggleTimes = useRef<number[]>([]);
 
-  const { difficulty, dismissedModifierTips, hintStock, progress, session, theme } = persisted;
+  const {
+    difficulty,
+    dismissedModifierTips,
+    hintStock,
+    onboardingDismissed,
+    progress,
+    session,
+    theme,
+  } = persisted;
   const puzzle = session.puzzle;
   const size = puzzle.size;
   const difficultyConfig = DIFFICULTIES[difficulty];
@@ -475,6 +772,13 @@ function App() {
         ...current.dismissedModifierTips,
         [modifierId]: true,
       },
+    }));
+  };
+
+  const dismissOnboarding = () => {
+    setPersisted((current) => ({
+      ...current,
+      onboardingDismissed: true,
     }));
   };
 
@@ -757,29 +1061,237 @@ function App() {
     }));
   };
 
+  const boardColumnCount = size + 1;
   const boardStyle = {
-    gridTemplateColumns: `repeat(${size + 1}, minmax(0, 1fr))`,
-    gridTemplateRows: `repeat(${size + 1}, minmax(0, 1fr))`,
-  } satisfies CSSProperties;
+    "--board-cell-size": `clamp(2.75rem, calc((100vw - 5.5rem) / ${boardColumnCount}), 4.6rem)`,
+    "--board-gap": "clamp(0.35rem, 1.4vw, 0.75rem)",
+    gap: "var(--board-gap)",
+    gridAutoRows: "var(--board-cell-size)",
+    gridTemplateColumns: `repeat(${boardColumnCount}, var(--board-cell-size))`,
+    gridTemplateRows: `repeat(${boardColumnCount}, var(--board-cell-size))`,
+  } as CSSProperties;
+  const showFirstRunCoach =
+    !onboardingDismissed &&
+    difficulty === "easy" &&
+    puzzle.level === 1 &&
+    progress.easy.clearedLevels === 0 &&
+    session.status === "playing";
+  const firstRunStage: FirstRunStage =
+    correctMarks === 0 ? "firstMark" : correctMarks < 3 ? "firstLine" : "rhythm";
+  const boardStatusPills: Array<{
+    key: string;
+    icon: ReactNode;
+    label: ReactNode;
+    rank?: number;
+    tone?: StatusPillTone;
+  }> = [
+    {
+      key: "correct",
+      icon: <CheckCircle2 className="h-3.5 w-3.5" />,
+      label: <>Correct marks {correctMarks}</>,
+      rank: 100,
+    },
+  ];
+
+  if (session.noEchoLine) {
+    boardStatusPills.push({
+      key: "no-echo",
+      icon: <ShieldAlert className="h-3.5 w-3.5" />,
+      label: (
+        <>
+          Next mark outside {session.noEchoLine.axis} {session.noEchoLine.index + 1}
+        </>
+      ),
+      rank: 95,
+      tone: "danger",
+    });
+  }
+
+  if (session.activeCommitment) {
+    boardStatusPills.push({
+      key: "commitment",
+      icon: <Lock className="h-3.5 w-3.5" />,
+      label: (
+        <>
+          Stay on {session.activeCommitment.axis} {session.activeCommitment.index + 1}
+        </>
+      ),
+      rank: 92,
+      tone: "sky",
+    });
+  }
+
+  if (session.toolLocked) {
+    boardStatusPills.push({
+      key: "tool-lock",
+      icon: <ShieldAlert className="h-3.5 w-3.5" />,
+      label: <>Erase unlocks after one visible target match</>,
+      rank: 90,
+      tone: "lemon",
+    });
+  }
+
+  if (puzzle.hintGate && !hintGateUnlocked) {
+    boardStatusPills.push({
+      key: "hint-gate",
+      icon: <Lightbulb className="h-3.5 w-3.5" />,
+      label: (
+        <>
+          Hints unlock {correctMarks}/{puzzle.hintGate.unlockAfterCorrectMarks}
+        </>
+      ),
+      rank: 88,
+      tone: "lemon",
+    });
+  }
+
+  if (spotlightProgress && !spotlightProgress.complete) {
+    boardStatusPills.push({
+      key: "spotlight",
+      icon: <Sparkles className="h-3.5 w-3.5" />,
+      label: (
+        <>
+          Stay on {spotlightProgress.axis} {spotlightProgress.index + 1}:{" "}
+          {spotlightProgress.current}/{spotlightProgress.required}
+        </>
+      ),
+      rank: 86,
+      tone: "lemon",
+    });
+  }
+
+  if (sealedProgress && !sealedProgress.unlocked) {
+    boardStatusPills.push({
+      key: "seals",
+      icon: <Lock className="h-3.5 w-3.5" />,
+      label: (
+        <>
+          Sealed cells {sealedProgress.current}/{sealedProgress.required}
+        </>
+      ),
+      rank: 70,
+      tone: "sky",
+    });
+  }
+
+  if (cloakedProgress && !cloakedProgress.unlocked) {
+    boardStatusPills.push({
+      key: "cloaks",
+      icon: <Sparkles className="h-3.5 w-3.5" />,
+      label: (
+        <>
+          Cloaked cells {cloakedProgress.current}/{cloakedProgress.required}
+        </>
+      ),
+      rank: 68,
+      tone: "berry",
+    });
+  }
+
+  if (puzzle.crossBlind) {
+    boardStatusPills.push({
+      key: "cross-blind",
+      icon: <Sparkles className="h-3.5 w-3.5" />,
+      label: (
+        <>
+          {puzzle.crossBlind.hiddenAxis === "row" ? "Rows hidden" : "Columns hidden"}:{" "}
+          {countMatchedTargetsOnAxis(
+            puzzle,
+            session.marks,
+            puzzle.crossBlind.hiddenAxis === "row" ? "column" : "row",
+          )}
+          /{puzzle.crossBlind.unlockAfterMatchedVisibleLines}
+        </>
+      ),
+      rank: 66,
+      tone: "berry",
+    });
+  }
+
+  if (factorCipherProgress && !factorCipherProgress.unlocked) {
+    boardStatusPills.push({
+      key: "factor-cipher",
+      icon: <Sparkles className="h-3.5 w-3.5" />,
+      label: (
+        <>
+          Factors reveal {factorCipherProgress.current}/{factorCipherProgress.required}
+        </>
+      ),
+      rank: 64,
+      tone: "accent",
+    });
+  }
+
+  const visibleBoardStatusPills = [...boardStatusPills]
+    .sort((a, b) => (b.rank ?? 0) - (a.rank ?? 0))
+    .slice(0, 3);
+  const tuckedBoardStatusCount =
+    boardStatusPills.length - visibleBoardStatusPills.length;
+  const renderDifficultyRail = (className = "") => (
+    <div className={`min-w-0 snap-x gap-2 overflow-x-auto pb-2 sm:gap-3 sm:pb-3 ${className}`}>
+      {DIFFICULTY_ORDER.map((id) => {
+        const active = difficulty === id;
+        const unlocked = isDifficultyAvailable(progress, id);
+        const label = DIFFICULTIES[id].label;
+        return (
+          <HapticButton
+            key={id}
+            type="button"
+            onClick={() => changeDifficulty(id)}
+            disabled={!unlocked}
+            aria-label={
+              unlocked
+                ? `${label} chapter, level ${progress[id].highestUnlockedLevel}`
+                : `${label} chapter locked`
+            }
+            className={`w-[7.25rem] shrink-0 snap-start rounded-[1.1rem] border px-3 py-2.5 text-left transition duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] sm:w-36 sm:rounded-[1.45rem] sm:py-3 sm:px-4 2xl:w-[10rem] ${
+              active
+                ? "border-[var(--accent)] bg-[var(--accent-soft)] shadow-[inset_0_-3px_0_color-mix(in_oklch,var(--accent)_28%,transparent),0_8px_18px_var(--shadow-soft)]"
+                : "border-[var(--panel-border)] bg-[var(--panel-muted)] shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_45%,transparent)] hover:-translate-y-0.5 hover:border-[var(--accent)]/50 hover:bg-[var(--panel-bg)]"
+            } ${!unlocked ? "cursor-not-allowed opacity-45" : ""}`}
+          >
+            <div className="flex items-center gap-2 text-[0.66rem] font-black uppercase tracking-[0.18em] text-[var(--text-muted)] sm:text-xs sm:tracking-[0.24em]">
+              {!unlocked && <Lock className="h-3.5 w-3.5" />}
+              {label}
+            </div>
+            <div className="game-number mt-1.5 text-base font-black text-[var(--text-primary)] sm:mt-2 sm:text-lg">
+              Lv {progress[id].highestUnlockedLevel}
+            </div>
+            <div className="mt-0.5 text-[0.7rem] text-[var(--text-secondary)] sm:mt-1 sm:text-xs">
+              {progress[id].clearedLevels} cleared
+            </div>
+          </HapticButton>
+        );
+      })}
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-[var(--app-bg)] text-[var(--text-primary)] transition-colors duration-300">
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute inset-0 opacity-45 [background-image:linear-gradient(90deg,color-mix(in_oklch,var(--border)_45%,transparent)_1px,transparent_1px),linear-gradient(180deg,color-mix(in_oklch,var(--border)_45%,transparent)_1px,transparent_1px)] [background-size:42px_42px]" />
-        <div className="absolute left-[-12%] top-16 h-24 w-[78rem] rotate-[-7deg] bg-[var(--glow-secondary)] opacity-70" />
-        <div className="absolute bottom-20 right-[-14rem] h-20 w-[56rem] rotate-[-14deg] bg-[var(--glow-primary)] opacity-80" />
+        <div className="absolute inset-0 opacity-25 [background-image:linear-gradient(90deg,color-mix(in_oklch,var(--border)_38%,transparent)_1px,transparent_1px),linear-gradient(180deg,color-mix(in_oklch,var(--border)_38%,transparent)_1px,transparent_1px)] [background-size:42px_42px] sm:opacity-35" />
+        <div className="absolute left-[-12%] top-16 hidden h-16 w-[72rem] rotate-[-7deg] bg-[var(--glow-secondary)] opacity-45 sm:block" />
+        <div className="absolute bottom-20 right-[-14rem] hidden h-14 w-[52rem] rotate-[-14deg] bg-[var(--glow-primary)] opacity-55 sm:block" />
       </div>
 
-      <main className="relative mx-auto flex min-h-screen w-full max-w-7xl flex-col px-0 pb-0 pt-0 sm:px-5 sm:pb-8 sm:pt-5 lg:px-8">
-        <section className="mx-auto flex w-full max-w-none flex-col gap-6 xl:flex-row xl:items-start">
+      <main className="relative mx-auto flex min-h-screen w-full max-w-[92rem] flex-col px-1.5 pb-24 pt-1.5 sm:px-5 sm:pb-28 sm:pt-5 lg:px-8 lg:py-5">
+        <section className="mx-auto flex w-full max-w-none flex-col">
           <div className="min-w-0 flex-1">
-            <div className="puzzle-surface min-h-screen rounded-none border-y border-[var(--panel-border)] p-3 shadow-[0_24px_80px_var(--shadow-board)] backdrop-blur sm:min-h-0 sm:rounded-[2rem] sm:border sm:p-4 xl:p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-[0.36em] text-[var(--accent-strong)]">
+            <div className="puzzle-surface min-h-[calc(100vh-0.75rem)] overflow-hidden rounded-[1.35rem] border border-[var(--panel-border)] p-2.5 shadow-[0_24px_80px_var(--shadow-board)] backdrop-blur sm:min-h-[calc(100vh-2.5rem)] sm:rounded-[2rem] sm:p-4 xl:p-6">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:gap-4 sm:items-start">
+                <div className="min-w-0">
+                  <p className="truncate text-[0.68rem] font-black uppercase tracking-[0.28em] text-[var(--accent-strong)] sm:text-xs sm:tracking-[0.36em]">
                     Cross Multiply
                   </p>
-                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <div className="mt-1 flex items-center gap-2 sm:hidden">
+                    <span className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-muted)] px-2.5 py-1 text-[0.62rem] font-bold uppercase tracking-[0.18em] text-[var(--text-muted)]">
+                      {difficultyConfig.label}
+                    </span>
+                    <span className="truncate rounded-full bg-[var(--accent-soft)] px-2.5 py-1 text-[0.62rem] font-black uppercase tracking-[0.16em] text-[var(--accent-strong)] shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--accent)_20%,transparent)]">
+                      {puzzle.bandLabel}
+                    </span>
+                  </div>
+                  <div className="mt-3 hidden flex-wrap items-center gap-3 sm:flex">
                     <span className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-muted)] px-3 py-1 text-[0.7rem] font-bold uppercase tracking-[0.24em] text-[var(--text-muted)]">
                       {puzzle.chapter}
                     </span>
@@ -789,8 +1301,8 @@ function App() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <HapticButton
+                <div className="flex items-center gap-1.5 sm:gap-2 sm:justify-end">
+                  <IconActionButton
                     type="button"
                     onClick={useHint}
                     disabled={
@@ -798,7 +1310,6 @@ function App() {
                       session.status !== "playing" ||
                       !hintGateUnlocked
                     }
-                    className="relative rounded-full border border-[var(--panel-border)] bg-[var(--panel-muted)] p-3 text-[var(--text-primary)] shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_45%,transparent)] transition hover:-translate-y-0.5 hover:border-[var(--accent)]/50 hover:bg-[var(--accent-soft)] disabled:cursor-not-allowed disabled:opacity-50"
                     aria-label={
                       hintGateUnlocked
                         ? "Use hint"
@@ -809,44 +1320,44 @@ function App() {
                     <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-[var(--accent-pop)] px-1.5 py-0.5 text-[0.65rem] font-black leading-none text-[var(--fg)]">
                       {hintGateUnlocked ? hintStock : <Lock className="h-3 w-3" />}
                     </span>
-                  </HapticButton>
-                  <HapticButton
+                  </IconActionButton>
+                  <IconActionButton
                     type="button"
                     onClick={() => generateLevel(difficulty, puzzle.level)}
-                    className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-muted)] p-3 text-[var(--text-primary)] shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_45%,transparent)] transition hover:-translate-y-0.5 hover:border-[var(--accent)]/50 hover:bg-[var(--accent-soft)]"
-                    aria-label="Generate a fresh puzzle"
+                    aria-label="Build a new board for this level"
                   >
                     <RefreshCw className="h-5 w-5" strokeWidth={1.8} />
-                  </HapticButton>
-                  <HapticButton
+                  </IconActionButton>
+                  <IconActionButton
                     type="button"
                     onClick={toggleTheme}
-                    className="rounded-full border border-[var(--panel-border)] bg-[var(--panel-muted)] p-3 text-[var(--text-primary)] shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_45%,transparent)] transition hover:-translate-y-0.5 hover:border-[var(--accent)]/50 hover:bg-[var(--accent-soft)]"
-                    aria-label="Toggle theme"
+                    aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
                   >
                     {theme === "dark" ? (
                       <Sun className="h-5 w-5" strokeWidth={1.8} />
                     ) : (
                       <Moon className="h-5 w-5" strokeWidth={1.8} />
                     )}
-                  </HapticButton>
+                  </IconActionButton>
                 </div>
               </div>
 
-              <div className="mt-4 flex flex-col gap-5 xl:mt-6 xl:flex-row xl:items-start xl:justify-between">
-                <div>
-                  <p className="text-sm font-black uppercase tracking-[0.26em] text-[var(--text-muted)]">
+              <div className="mt-3 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 sm:mt-5 sm:gap-5 xl:mt-6 xl:grid-cols-[minmax(18rem,0.75fr)_minmax(30rem,1.25fr)] xl:items-end">
+                <div className="min-w-0">
+                  <p className="hidden text-sm font-black uppercase tracking-[0.26em] text-[var(--text-muted)] sm:block">
                     {difficultyConfig.label} Chapter
                   </p>
-                  <div className="mt-3 flex flex-wrap items-end gap-3">
-                    <h1 className="game-number text-5xl font-black tracking-tight text-[var(--text-primary)] sm:text-6xl">
-                      Level {puzzle.level}
+                  <div className="flex flex-wrap items-center gap-2 sm:mt-3 sm:items-end sm:gap-3">
+                    <h1 className="game-number text-[2rem] font-black leading-none text-[var(--text-primary)] sm:text-6xl">
+                      <span className="sm:hidden">Lv </span>
+                      <span className="hidden sm:inline">Level </span>
+                      {puzzle.level}
                     </h1>
-                    <div className="rounded-full bg-[var(--lemon)] px-3 py-1 text-sm font-black uppercase tracking-[0.22em] text-[var(--fg)]">
+                    <div className="rounded-full bg-[var(--lemon)] px-2.5 py-1 text-[0.7rem] font-black uppercase tracking-[0.16em] text-[var(--fg)] sm:px-3 sm:text-sm sm:tracking-[0.22em]">
                       {difficultyConfig.badge}
                     </div>
                   </div>
-                  <div className="mt-4 flex items-center gap-2">
+                  <div className="mt-2 hidden items-center gap-2 sm:flex">
                     {Array.from({ length: 3 }, (_, index) => (
                       <Star
                         key={index}
@@ -864,111 +1375,44 @@ function App() {
                   </div>
                 </div>
 
-                <div className="-mx-3 flex gap-3 overflow-x-auto px-3 pb-4 xl:-mx-1 xl:px-1">
-                  {DIFFICULTY_ORDER.map((id) => {
-                    const active = difficulty === id;
-                    const unlocked = isDifficultyAvailable(progress, id);
-                    return (
-                      <HapticButton
-                        key={id}
-                        type="button"
-                        onClick={() => changeDifficulty(id)}
-                        disabled={!unlocked}
-                        className={`shrink-0 rounded-[1.45rem] border px-3 py-3 text-left transition duration-200 sm:px-4 ${
-                          active
-                            ? "border-[var(--accent)] bg-[var(--accent-soft)] shadow-[inset_0_-3px_0_color-mix(in_oklch,var(--accent)_28%,transparent),0_8px_18px_var(--shadow-soft)]"
-                            : "border-[var(--panel-border)] bg-[var(--panel-muted)] shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_45%,transparent)] hover:-translate-y-0.5 hover:border-[var(--accent)]/50 hover:bg-[var(--panel-bg)]"
-                        } ${!unlocked ? "cursor-not-allowed opacity-45" : ""}`}
-                      >
-                        <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.24em] text-[var(--text-muted)]">
-                          {!unlocked && <Lock className="h-3.5 w-3.5" />}
-                          {DIFFICULTIES[id].label}
-                        </div>
-                        <div className="game-number mt-2 text-lg font-black text-[var(--text-primary)]">
-                          Lv {progress[id].highestUnlockedLevel}
-                        </div>
-                        <div className="mt-1 text-xs text-[var(--text-secondary)]">
-                          {progress[id].clearedLevels} cleared
-                        </div>
-                      </HapticButton>
-                    );
-                  })}
-                </div>
+                {renderDifficultyRail("hidden sm:flex xl:justify-start")}
               </div>
 
-              <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_21rem]">
-                <div className="rounded-[1.75rem] border border-[var(--panel-border)] bg-[var(--board-shell)] p-2 shadow-[inset_0_1px_0_color-mix(in_oklch,var(--surface)_55%,transparent),0_20px_44px_var(--shadow-board)] sm:p-4">
-                  <div className="mb-4 flex flex-wrap items-center gap-3">
+              <div className="mt-3 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 sm:mt-5 sm:gap-5 lg:grid-cols-[minmax(0,1fr)_19rem] xl:grid-cols-[minmax(0,1fr)_22rem]">
+                <div className="w-full min-w-0 overflow-hidden rounded-[1.35rem] border border-[var(--panel-border)] bg-[var(--board-shell)] p-2 shadow-[inset_0_1px_0_color-mix(in_oklch,var(--surface)_55%,transparent),0_20px_44px_var(--shadow-board)] sm:rounded-[1.75rem] sm:p-4 lg:p-5">
+                  <div className="mb-2 flex min-w-0 flex-nowrap items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none] sm:mb-4 sm:flex-wrap sm:gap-3 sm:overflow-visible sm:pb-0">
                     <Hearts hearts={session.hearts} maxHearts={session.maxHearts} />
-                    <div className="inline-flex items-center gap-2 rounded-full border border-[var(--panel-border)] bg-[var(--panel-muted)] px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-[var(--text-secondary)] shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_35%,transparent)]">
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      Correct {correctMarks}
-                    </div>
-                    {puzzle.hintGate && !hintGateUnlocked && (
-                      <div className="inline-flex items-center gap-2 rounded-full border border-[var(--lemon)]/45 bg-[color-mix(in_oklch,var(--lemon)_22%,transparent)] px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-[var(--text-primary)]">
-                        <Lightbulb className="h-3.5 w-3.5" />
-                        Hints {correctMarks}/{puzzle.hintGate.unlockAfterCorrectMarks}
-                      </div>
-                    )}
-                    {sealedProgress && !sealedProgress.unlocked && (
-                      <div className="inline-flex items-center gap-2 rounded-full border border-[var(--sky)]/35 bg-[color-mix(in_oklch,var(--sky)_16%,transparent)] px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-[var(--sky)]">
-                        <Lock className="h-3.5 w-3.5" />
-                        Seals {sealedProgress.current}/{sealedProgress.required}
-                      </div>
-                    )}
-                    {cloakedProgress && !cloakedProgress.unlocked && (
-                      <div className="inline-flex items-center gap-2 rounded-full border border-[var(--berry)]/35 bg-[color-mix(in_oklch,var(--berry)_16%,transparent)] px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-[var(--berry)]">
-                        <Sparkles className="h-3.5 w-3.5" />
-                        Cloaks {cloakedProgress.current}/{cloakedProgress.required}
-                      </div>
-                    )}
-                    {spotlightProgress && !spotlightProgress.complete && (
-                      <div className="inline-flex items-center gap-2 rounded-full border border-[var(--lemon)]/45 bg-[color-mix(in_oklch,var(--lemon)_24%,transparent)] px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-[var(--text-primary)]">
-                        <Sparkles className="h-3.5 w-3.5" />
-                        Spotlight {spotlightProgress.axis} {spotlightProgress.index + 1}:{" "}
-                        {spotlightProgress.current}/{spotlightProgress.required}
-                      </div>
-                    )}
-                    {session.toolLocked && (
-                      <div className="inline-flex items-center gap-2 rounded-full border border-[var(--lemon)]/45 bg-[color-mix(in_oklch,var(--lemon)_22%,transparent)] px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-[var(--text-primary)]">
-                        <ShieldAlert className="h-3.5 w-3.5" />
-                        Start in select. Switch unlocks after matching a visible target
-                      </div>
-                    )}
-                    {session.activeCommitment && (
-                      <div className="inline-flex items-center gap-2 rounded-full border border-[var(--sky)]/35 bg-[color-mix(in_oklch,var(--sky)_16%,transparent)] px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-[var(--sky)]">
-                        <Lock className="h-3.5 w-3.5" />
-                        Locked to {session.activeCommitment.axis} {session.activeCommitment.index + 1}
-                      </div>
-                    )}
-                    {session.noEchoLine && (
-                      <div className="inline-flex items-center gap-2 rounded-full border border-[var(--danger)]/35 bg-[color-mix(in_oklch,var(--danger)_16%,transparent)] px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-[var(--danger)]">
-                        <ShieldAlert className="h-3.5 w-3.5" />
-                        Next off {session.noEchoLine.axis} {session.noEchoLine.index + 1}
-                      </div>
-                    )}
-                    {puzzle.crossBlind && (
-                      <div className="inline-flex items-center gap-2 rounded-full border border-[var(--berry)]/35 bg-[color-mix(in_oklch,var(--berry)_16%,transparent)] px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-[var(--berry)]">
-                        <Sparkles className="h-3.5 w-3.5" />
-                        {puzzle.crossBlind.hiddenAxis} axis blind:{" "}
-                        {countMatchedTargetsOnAxis(
-                          puzzle,
-                          session.marks,
-                          puzzle.crossBlind.hiddenAxis === "row" ? "column" : "row",
-                        )}
-                        /{puzzle.crossBlind.unlockAfterMatchedVisibleLines}
-                      </div>
-                    )}
-                    {factorCipherProgress && !factorCipherProgress.unlocked && (
-                      <div className="inline-flex items-center gap-2 rounded-full border border-[var(--accent)]/35 bg-[var(--accent-soft)] px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-[var(--accent-strong)]">
-                        <Sparkles className="h-3.5 w-3.5" />
-                        Cipher {factorCipherProgress.current}/{factorCipherProgress.required}
-                      </div>
+                    {visibleBoardStatusPills.map((pill) => (
+                      <StatusPill
+                        key={pill.key}
+                        icon={pill.icon}
+                        tone={pill.tone}
+                      >
+                        {pill.label}
+                      </StatusPill>
+                    ))}
+                    {tuckedBoardStatusCount > 0 && (
+                      <StatusPill
+                        icon={
+                          <span className="game-number text-[0.7rem]">
+                            +{tuckedBoardStatusCount}
+                          </span>
+                        }
+                      >
+                        More active
+                      </StatusPill>
                     )}
                   </div>
 
-                  <div className="mx-auto w-full max-w-3xl">
-                    <div className="grid gap-1.5 sm:gap-3" style={boardStyle}>
+                  {showFirstRunCoach && (
+                    <FirstRunCoach
+                      stage={firstRunStage}
+                      onDismiss={dismissOnboarding}
+                    />
+                  )}
+
+                  <div className="mx-auto w-full max-w-max overflow-x-auto overscroll-x-contain pb-2 [scrollbar-width:thin]">
+                    <div className="grid w-max" style={boardStyle}>
                       <div className="rounded-[1rem] border border-dashed border-[var(--panel-border)] bg-[var(--panel-muted)]/60 sm:rounded-[1.15rem]" />
 
                       {puzzle.colTargets.map((_, col) => {
@@ -1034,54 +1478,55 @@ function App() {
                   </div>
                 </div>
 
-                <div className="space-y-4">
-                  <div className="rounded-[1.75rem] border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4 shadow-[inset_0_1px_0_color-mix(in_oklch,var(--surface)_55%,transparent)]">
-                    <p className="text-xs font-black uppercase tracking-[0.24em] text-[var(--text-muted)]">
-                      Tools
-                    </p>
-                    <div className="mt-3 grid grid-cols-2 gap-3">
-                      <ToolButton
-                        active={session.mode === "erase"}
-                        onClick={() => setMode("erase")}
-                        disabled={session.toolLocked && session.mode !== "erase"}
-                        label="Erase"
-                        meta={
-                          session.toolLocked && session.mode !== "erase"
-                            ? "Locked"
-                            : undefined
-                        }
-                        icon={<Eraser className="h-5 w-5" strokeWidth={1.8} />}
-                      />
-                      <ToolButton
-                        active={session.mode === "select"}
-                        onClick={() => setMode("select")}
-                        disabled={session.toolLocked && session.mode !== "select"}
-                        label="Select"
-                        meta={
-                          session.toolLocked && session.mode !== "select"
-                            ? "Locked"
-                            : undefined
-                        }
-                        icon={
-                          <CheckCircle2 className="h-5 w-5" strokeWidth={1.8} />
-                        }
-                      />
-                    </div>
+                {renderDifficultyRail("flex sm:hidden")}
+
+                <div className="space-y-3 lg:sticky lg:top-5 lg:max-h-[calc(100vh-2.5rem)] lg:overflow-y-auto lg:pr-1">
+                  <div className="hidden lg:block">
+                    <SidebarPanel title="Tools">
+                      <div className="grid grid-cols-2 gap-3">
+                        <ToolButton
+                          active={session.mode === "erase"}
+                          onClick={() => setMode("erase")}
+                          disabled={session.toolLocked && session.mode !== "erase"}
+                          label="Erase"
+                          meta={
+                            session.toolLocked && session.mode !== "erase"
+                              ? "Locked for now"
+                              : undefined
+                          }
+                          icon={<Eraser className="h-5 w-5" strokeWidth={1.8} />}
+                        />
+                        <ToolButton
+                          active={session.mode === "select"}
+                          onClick={() => setMode("select")}
+                          disabled={session.toolLocked && session.mode !== "select"}
+                          label="Select"
+                          meta={
+                            session.toolLocked && session.mode !== "select"
+                              ? "Locked for now"
+                              : undefined
+                          }
+                          icon={
+                            <CheckCircle2 className="h-5 w-5" strokeWidth={1.8} />
+                          }
+                        />
+                      </div>
+                    </SidebarPanel>
                   </div>
 
-                  <div className="rounded-[1.75rem] border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4 shadow-[inset_0_1px_0_color-mix(in_oklch,var(--surface)_55%,transparent)]">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-xs font-black uppercase tracking-[0.24em] text-[var(--text-muted)]">
-                        Modifier Stack
-                      </p>
-                      <span className="text-xs text-[var(--text-secondary)]">
-                        {puzzle.modifiers.length || "Classic"}
-                      </span>
-                    </div>
-                    <div className="mt-3 space-y-3">
+                  <SidebarPanel
+                    title="Rules"
+                    meta={
+                      puzzle.modifiers.length
+                        ? `${puzzle.modifiers.length} active`
+                        : "Classic"
+                    }
+                    defaultOpen={teachingModifiers.length > 0}
+                  >
+                    <div className="space-y-3">
                       {puzzle.modifiers.length === 0 && (
                         <div className="rounded-[1.2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] px-4 py-3 text-sm font-medium text-[var(--text-secondary)] shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_35%,transparent)]">
-                          Classic training board. No extra rules yet.
+                          Classic board. Select factors and erase extras.
                         </div>
                       )}
                       {teachingModifiers.map((modifier) => (
@@ -1101,7 +1546,7 @@ function App() {
                             <HapticButton
                               type="button"
                               onClick={() => dismissModifierTip(modifier.id)}
-                              className="rounded-full border border-[var(--sky)]/25 bg-[var(--panel-bg)]/55 p-1 text-[var(--sky)] transition hover:bg-[var(--panel-bg)]"
+                              className="rounded-full border border-[var(--sky)]/25 bg-[var(--panel-bg)]/55 p-1 text-[var(--sky)] transition hover:bg-[var(--panel-bg)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--sky)]"
                               aria-label={`Dismiss ${modifier.title} tip`}
                             >
                               <X className="h-4 w-4" strokeWidth={1.8} />
@@ -1112,35 +1557,21 @@ function App() {
                           </p>
                         </div>
                       ))}
-                      {puzzle.modifiers.map((modifier) => (
-                        <div
-                          key={modifier.id}
-                          className="rounded-[1.2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] px-4 py-3 shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_35%,transparent)]"
-                        >
-                          <div className="flex items-center gap-2">
+                      {teachingModifiers.length === 0 &&
+                        puzzle.modifiers.map((modifier) => (
+                          <div
+                            key={modifier.id}
+                            className="flex items-center gap-2 rounded-[1.2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] px-4 py-3 text-sm font-semibold text-[var(--text-primary)] shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_35%,transparent)]"
+                          >
                             <Sparkles className="h-4 w-4 text-[var(--accent)]" />
-                            <h2 className="text-sm font-semibold text-[var(--text-primary)]">
-                              {modifier.title}
-                            </h2>
+                            {modifier.title}
                           </div>
-                          <p className="mt-2 text-sm text-[var(--text-secondary)]">
-                            {modifier.description}
-                          </p>
-                        </div>
-                      ))}
+                        ))}
                     </div>
-                  </div>
+                  </SidebarPanel>
 
-                  <div className="rounded-[1.75rem] border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4 shadow-[inset_0_1px_0_color-mix(in_oklch,var(--surface)_55%,transparent)]">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-xs font-black uppercase tracking-[0.24em] text-[var(--text-muted)]">
-                        Missions
-                      </p>
-                      <span className="text-xs text-[var(--text-secondary)]">
-                        Optional
-                      </span>
-                    </div>
-                    <div className="mt-3 space-y-3">
+                  <SidebarPanel title="Missions" meta="Optional goals" defaultOpen={false}>
+                    <div className="space-y-3">
                       {puzzle.missions.map((mission) => {
                         const completed =
                           currentResult?.missionsCompleted.includes(mission.id) ??
@@ -1173,14 +1604,11 @@ function App() {
                         );
                       })}
                     </div>
-                  </div>
+                  </SidebarPanel>
 
-                  <div className="rounded-[1.75rem] border border-[var(--panel-border)] bg-[var(--panel-muted)] p-4 shadow-[inset_0_1px_0_color-mix(in_oklch,var(--surface)_55%,transparent)]">
-                    <p className="text-xs font-black uppercase tracking-[0.24em] text-[var(--text-muted)]">
-                      Chapter Progress
-                    </p>
-                    <div className="mt-3 rounded-[1.2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] px-4 py-4 shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_35%,transparent)]">
-                      <div className="flex items-center justify-between gap-4">
+                  <SidebarPanel title="Progress" defaultOpen={false}>
+                    <div className="rounded-[1.2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] px-4 py-4 shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_35%,transparent)]">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                         <div>
                           <div className="game-number text-lg font-black text-[var(--text-primary)]">
                             {progress[difficulty].clearedLevels} levels cleared
@@ -1189,7 +1617,7 @@ function App() {
                             Highest unlocked: Level {progress[difficulty].highestUnlockedLevel}
                           </div>
                         </div>
-                        <div className="text-right text-sm text-[var(--text-secondary)]">
+                        <div className="text-sm text-[var(--text-secondary)] sm:text-right">
                           {nextLockedDifficulty && nextUnlockSource ? (
                             <>
                               <div>
@@ -1224,91 +1652,124 @@ function App() {
                         </div>
                       )}
                     </div>
-                  </div>
+                  </SidebarPanel>
                 </div>
               </div>
             </div>
           </div>
         </section>
 
+        {session.status === "playing" && (
+          <MobileToolDock
+            mode={session.mode}
+            onModeChange={setMode}
+            toolLocked={session.toolLocked}
+          />
+        )}
+
         {(isPending || session.status !== "playing") && (
-          <div className="pointer-events-none fixed inset-x-0 bottom-4 mx-auto flex w-fit max-w-[90vw] items-center gap-3 rounded-full border border-[var(--panel-border)] bg-[var(--panel-bg)]/95 px-4 py-3 text-sm font-bold text-[var(--text-primary)] shadow-[0_18px_48px_var(--shadow-board)] backdrop-blur">
-            {isPending && <span>Generating a fresh challenge board...</span>}
+          <div
+            role="status"
+            aria-live="polite"
+            className="pointer-events-none fixed inset-x-0 bottom-24 mx-auto flex w-fit max-w-[90vw] items-center gap-3 rounded-full border border-[var(--panel-border)] bg-[var(--panel-bg)]/95 px-4 py-3 text-sm font-bold text-[var(--text-primary)] shadow-[0_18px_48px_var(--shadow-board)] backdrop-blur lg:bottom-4"
+          >
+            {isPending && <span>Building a fresh board...</span>}
             {!isPending && session.status === "won" && (
-              <span>Clean solve. Your reward summary is ready.</span>
+              <span>Level cleared. Review your stars and missions.</span>
             )}
             {!isPending && session.status === "lost" && (
-              <span>Out of hearts. Retry this board or roll a fresh layout.</span>
+              <span>Out of hearts. Retry this board or start a new layout.</span>
             )}
           </div>
         )}
 
         {session.status === "lost" && (
-          <div className="fixed inset-0 z-40 flex items-center justify-center bg-[oklch(15%_0.02_230/0.5)] p-4 backdrop-blur-sm">
-            <div className="dialog-surface w-full max-w-sm rounded-[2rem] border border-[var(--panel-border)] p-6 text-center shadow-[0_24px_80px_var(--shadow-board)]">
+          <DialogShell
+            title="Out of hearts"
+            icon={
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-[var(--danger)]/35 bg-[color-mix(in_oklch,var(--danger)_16%,transparent)] text-[var(--danger)]">
                 <Heart className="h-6 w-6 fill-current" strokeWidth={1.8} />
               </div>
-              <h2 className="mt-4 text-3xl font-black text-[var(--text-primary)]">
-                Out of hearts
-              </h2>
-              <p className="mt-2 text-sm text-[var(--text-secondary)]">
-                This chapter uses pressure as part of the puzzle. Reset and try a cleaner line.
-              </p>
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            }
+            actions={
+              <>
                 <HapticButton
                   type="button"
                   onClick={retryLevel}
-                  className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] px-4 py-3 text-sm font-black text-[var(--text-primary)] shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_45%,transparent)] transition hover:-translate-y-0.5"
+                  className={secondaryActionClass}
                 >
-                  Retry
+                  Retry board
                 </HapticButton>
                 <HapticButton
                   type="button"
                   onClick={rerollLevel}
-                  className="rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-black text-[var(--cell-highlight-text)] shadow-[0_12px_30px_var(--glow-primary)] transition hover:-translate-y-0.5"
+                  className={primaryActionClass}
                 >
                   New board
                 </HapticButton>
-              </div>
-            </div>
-          </div>
+              </>
+            }
+          >
+              <p className="mt-2 text-sm text-[var(--text-secondary)]">
+                You used every heart. Retry this board, or start a new layout for the same level.
+              </p>
+          </DialogShell>
         )}
 
         {unlockDialogOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-[oklch(15%_0.02_230/0.5)] p-4 backdrop-blur-sm">
-            <div className="dialog-surface w-full max-w-sm rounded-[2rem] border border-[var(--panel-border)] p-6 text-center shadow-[0_24px_80px_var(--shadow-board)]">
+          <DialogShell
+            title="All chapters unlocked"
+            icon={
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-[var(--lemon)]/50 bg-[color-mix(in_oklch,var(--lemon)_30%,transparent)] text-[var(--text-primary)]">
                 <Sparkles className="h-6 w-6" strokeWidth={1.8} />
               </div>
-              <h2 className="mt-4 text-3xl font-black text-[var(--text-primary)]">
-                All chapters unlocked
-              </h2>
-              <p className="mt-2 text-sm text-[var(--text-secondary)]">
-                The hidden gate opened. Medium, Hard, Expert, and Mythic are ready.
-              </p>
+            }
+            actions={
               <HapticButton
                 type="button"
                 onClick={() => setUnlockDialogOpen(false)}
-                className="mt-6 w-full rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-black text-[var(--cell-highlight-text)] shadow-[0_12px_30px_var(--glow-primary)] transition hover:-translate-y-0.5"
+                className={`sm:col-span-2 ${primaryActionClass}`}
               >
-                Nice
+                Choose a chapter
               </HapticButton>
-            </div>
-          </div>
+            }
+          >
+              <p className="mt-2 text-sm text-[var(--text-secondary)]">
+                Medium, Hard, Expert, and Mythic are ready in the chapter rail.
+              </p>
+          </DialogShell>
         )}
 
         {session.status === "won" && (
-          <div className="fixed inset-0 z-40 flex items-center justify-center bg-[oklch(15%_0.02_230/0.5)] p-4 backdrop-blur-sm">
-            <div className="dialog-surface w-full max-w-lg rounded-[2rem] border border-[var(--panel-border)] p-6 shadow-[0_24px_80px_var(--shadow-board)]">
+          <DialogShell
+            title="Level cleared"
+            size="lg"
+            icon={
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-[var(--success)]/35 bg-[color-mix(in_oklch,var(--success)_18%,transparent)] text-[var(--success)]">
                 <CheckCircle2 className="h-6 w-6" strokeWidth={1.8} />
               </div>
-              <h2 className="mt-4 text-center text-3xl font-black text-[var(--text-primary)]">
-                Level cleared
-              </h2>
+            }
+            actions={
+              <>
+                <HapticButton
+                  type="button"
+                  onClick={retryLevel}
+                  className={secondaryActionClass}
+                >
+                  Replay same board
+                </HapticButton>
+                <HapticButton
+                  type="button"
+                  onClick={moveToNextLevel}
+                  className={primaryActionClass}
+                >
+                  Next level
+                </HapticButton>
+              </>
+            }
+          >
               <p className="mt-2 text-center text-sm text-[var(--text-secondary)]">
-                {puzzle.chapter} rewards clean solves and disciplined clue use.
+                Your best result for this level now includes these stars and missions.
               </p>
 
               <div className="mt-6 rounded-[1.5rem] border border-[var(--panel-border)] bg-[var(--panel-muted)] p-5 shadow-[inset_0_1px_0_color-mix(in_oklch,var(--surface)_55%,transparent)]">
@@ -1326,30 +1787,9 @@ function App() {
                   ))}
                 </div>
                 <div className="mt-5 grid grid-cols-3 gap-2 sm:gap-3">
-                  <div className="rounded-[1.2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] px-2 py-2.5 text-center shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_35%,transparent)] sm:px-4 sm:py-3">
-                    <div className="text-[10px] font-black uppercase tracking-[0.16em] text-[var(--text-muted)] sm:text-xs sm:tracking-[0.22em]">
-                      Hearts
-                    </div>
-                    <div className="game-number mt-1.5 text-xl font-black text-[var(--text-primary)] sm:mt-2 sm:text-2xl">
-                      {session.hearts}/{session.maxHearts}
-                    </div>
-                  </div>
-                  <div className="rounded-[1.2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] px-2 py-2.5 text-center shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_35%,transparent)] sm:px-4 sm:py-3">
-                    <div className="text-[10px] font-black uppercase tracking-[0.16em] text-[var(--text-muted)] sm:text-xs sm:tracking-[0.22em]">
-                      Hints
-                    </div>
-                    <div className="game-number mt-1.5 text-xl font-black text-[var(--text-primary)] sm:mt-2 sm:text-2xl">
-                      {session.hintsUsed}
-                    </div>
-                  </div>
-                  <div className="rounded-[1.2rem] border border-[var(--panel-border)] bg-[var(--panel-bg)] px-2 py-2.5 text-center shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_35%,transparent)] sm:px-4 sm:py-3">
-                    <div className="text-[10px] font-black uppercase tracking-[0.16em] text-[var(--text-muted)] sm:text-xs sm:tracking-[0.22em]">
-                      Mistakes
-                    </div>
-                    <div className="game-number mt-1.5 text-xl font-black text-[var(--text-primary)] sm:mt-2 sm:text-2xl">
-                      {session.mistakes}
-                    </div>
-                  </div>
+                  <ResultStat label="Hearts" value={`${session.hearts}/${session.maxHearts}`} />
+                  <ResultStat label="Hints" value={session.hintsUsed} />
+                  <ResultStat label="Mistakes" value={session.mistakes} />
                 </div>
 
                 <div className="mt-4 space-y-3">
@@ -1391,25 +1831,7 @@ function App() {
                   })}
                 </div>
               </div>
-
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                <HapticButton
-                  type="button"
-                  onClick={retryLevel}
-                  className="rounded-2xl border border-[var(--panel-border)] bg-[var(--panel-muted)] px-4 py-3 text-sm font-black text-[var(--text-primary)] shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_45%,transparent)] transition hover:-translate-y-0.5"
-                >
-                  Replay same board
-                </HapticButton>
-                <HapticButton
-                  type="button"
-                  onClick={moveToNextLevel}
-                  className="rounded-2xl bg-[var(--accent)] px-4 py-3 text-sm font-black text-[var(--cell-highlight-text)] shadow-[0_12px_30px_var(--glow-primary)] transition hover:-translate-y-0.5"
-                >
-                  Next level
-                </HapticButton>
-              </div>
-            </div>
-          </div>
+          </DialogShell>
         )}
       </main>
     </div>

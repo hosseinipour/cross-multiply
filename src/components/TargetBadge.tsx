@@ -1,5 +1,30 @@
 const formatter = new Intl.NumberFormat();
 
+function getFactorRows(factors: number[]) {
+  const rowSize = factors.length > 4 ? 3 : 2;
+  const rows: number[][] = [];
+
+  for (let index = 0; index < factors.length; index += rowSize) {
+    rows.push(factors.slice(index, index + rowSize));
+  }
+
+  return rows;
+}
+
+function getFactorPowers(factors: number[]) {
+  return factors.reduce<Array<{ base: number; count: number }>>((powers, base) => {
+    const previous = powers.at(-1);
+
+    if (previous?.base === base) {
+      previous.count += 1;
+      return powers;
+    }
+
+    powers.push({ base, count: 1 });
+    return powers;
+  }, []);
+}
+
 export function TargetBadge({
   concealment = null,
   factorChips,
@@ -18,10 +43,12 @@ export function TargetBadge({
   const hidden = target === null;
   const ciphered = !hidden && Boolean(factorChips?.length);
   const hiddenLabel = concealment === "blind" ? "Blind" : "Fog";
+  const factorRows = factorChips ? getFactorRows(factorChips) : [];
+  const factorPowers = factorChips ? getFactorPowers(factorChips) : [];
 
   return (
     <div
-      className={`game-number relative flex aspect-square items-center justify-center rounded-[1rem] border px-1 text-center transition duration-200 sm:rounded-[1.15rem] ${
+      className={`game-number relative flex aspect-square items-center justify-center rounded-[1rem] border text-center transition duration-200 sm:rounded-[1.15rem] ${
         resolved
           ? "border-transparent bg-transparent text-transparent"
           : hidden
@@ -33,26 +60,52 @@ export function TargetBadge({
     >
       {!resolved && (
         <>
-          <span
-            className={`font-extrabold ${
-              ciphered
-                ? "max-w-full px-1 text-[clamp(0.5rem,1.4vw,0.9rem)] leading-tight"
-                : "text-[clamp(0.8rem,1.8vw,1.4rem)] sm:text-[clamp(0.9rem,2vw,1.4rem)]"
-            }`}
-          >
-            {hidden
-              ? "?"
-              : ciphered
-                ? factorChips?.join(" x ")
-                : formatter.format(target)}
-          </span>
+          {ciphered ? (
+            <>
+              <span className="grid w-full max-w-[calc(100%-0.5rem)] grid-cols-3 place-items-center gap-0.5 px-0.5 text-[0.58rem] font-black leading-none text-[var(--text-primary)] sm:hidden">
+                {factorPowers.map(({ base, count }) => (
+                  <span
+                    key={`${base}-${count}`}
+                    className="inline-flex min-w-0 max-w-full items-baseline justify-center rounded-full bg-[color-mix(in_oklch,var(--accent-soft)_64%,transparent)] px-1 py-0.5"
+                  >
+                    {base}
+                    {count > 1 && (
+                      <sup className="ml-px text-[0.48rem] leading-none">
+                        {count}
+                      </sup>
+                    )}
+                  </span>
+                ))}
+              </span>
+              <span className="hidden max-w-full flex-col items-center justify-center gap-1 px-1 pb-3 text-[0.78rem] font-black leading-[0.9rem] text-[var(--text-primary)] sm:flex">
+                {factorRows.map((row, index) => (
+                  <span
+                    key={`${row.join("-")}-${index}`}
+                    className="whitespace-nowrap"
+                  >
+                    {row.join(" x ")}
+                  </span>
+                ))}
+              </span>
+            </>
+          ) : (
+            <span className="px-1 text-[clamp(0.8rem,1.8vw,1.4rem)] font-extrabold sm:text-[clamp(0.9rem,2vw,1.4rem)]">
+              {hidden ? "?" : formatter.format(target)}
+            </span>
+          )}
           {!hidden && progress > 1 && !progressHidden && (
-            <span className="absolute right-1 top-1 rounded-full bg-[var(--accent-soft)] px-1 text-[0.55rem] font-black leading-none text-[var(--accent-strong)] sm:right-1.5 sm:top-1.5 sm:text-[0.6rem]">
+            <span
+              className={`absolute rounded-full bg-[var(--accent-soft)] px-1 font-black leading-none text-[var(--accent-strong)] ${
+                ciphered
+                  ? "hidden sm:right-1.5 sm:top-1.5 sm:block sm:text-[0.6rem]"
+                  : "right-1 top-1 text-[0.55rem] sm:right-1.5 sm:top-1.5 sm:text-[0.6rem]"
+              }`}
+            >
               {formatter.format(progress)}
             </span>
           )}
           {ciphered && (
-            <span className="absolute bottom-1 left-1/2 -translate-x-1/2 text-[0.48rem] uppercase tracking-[0.18em] text-[var(--accent-strong)]">
+            <span className="absolute bottom-1 left-1/2 hidden -translate-x-1/2 text-[0.48rem] uppercase tracking-[0.18em] text-[var(--accent-strong)] sm:block">
               Factors
             </span>
           )}
