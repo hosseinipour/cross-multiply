@@ -1,7 +1,17 @@
 {
   "name": "cross-multiply",
-  "private": true,
+  "private": false,
   "version": "0.0.0",
+  "description": "A multiply-first number puzzle with generated levels, progression, and offline play.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hosseinipour/cross-multiply.git"
+  },
+  "bugs": {
+    "url": "https://github.com/hosseinipour/cross-multiply/issues"
+  },
+  "homepage": "https://github.com/hosseinipour/cross-multiply#readme",
   "type": "module",
   "scripts": {
     "dev": "vite",
