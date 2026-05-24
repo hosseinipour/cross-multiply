@@ -48,16 +48,17 @@ export function TargetBadge({
 
   return (
     <div
-      className={`game-number relative flex aspect-square items-center justify-center rounded-[1rem] border text-center transition duration-200 sm:rounded-[1.15rem] ${
+      className={`game-number relative flex aspect-square items-center justify-center rounded-[1rem] border text-center spring-transition sm:rounded-[1.25rem] ${
         resolved
-          ? "border-transparent bg-transparent text-transparent"
+          ? "border-transparent bg-transparent text-transparent opacity-0 scale-[0.92] pointer-events-none"
           : hidden
             ? concealment === "blind"
-              ? "border-dashed border-[var(--berry)]/45 bg-[color-mix(in_oklch,var(--berry)_16%,transparent)] text-[var(--berry)]"
-              : "border-dashed border-[var(--target-border)] bg-[var(--panel-muted)]/70 text-[var(--text-muted)]"
-            : "border-[var(--target-border)] bg-[var(--target-bg)] text-[var(--text-primary)] shadow-[inset_0_-3px_0_color-mix(in_oklch,var(--target-border)_34%,transparent),0_8px_18px_var(--shadow-soft)]"
+              ? "border-dashed border-[var(--berry)]/45 bg-[color-mix(in_oklch,var(--berry)_12%,transparent)] text-[var(--berry)]"
+              : "border-dashed border-[var(--target-border)] bg-[var(--panel-muted)]/50 text-[var(--text-muted)]"
+            : "border-[var(--target-border)] bg-[var(--target-bg)] text-[var(--text-primary)] shadow-[inset_0_-3px_0_color-mix(in_oklch,var(--target-border)_45%,transparent),0_8px_16px_var(--shadow-soft)]"
       }`}
     >
+
       {!resolved && (
         <>
           {ciphered ? (

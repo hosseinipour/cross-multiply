@@ -127,14 +127,14 @@ export function GameDialogs({
             Your best result for this level now includes these stars and missions.
           </p>
 
-          <div className="mt-6 rounded-[1.5rem] border border-[var(--panel-border)] bg-[var(--panel-muted)] p-5 shadow-[inset_0_1px_0_color-mix(in_oklch,var(--surface)_55%,transparent)]">
+          <div className="mt-6 rounded-[1.75rem] border border-[var(--panel-border)] bg-[var(--panel-muted)]/50 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_12px_28px_var(--shadow-soft)]">
             <div className="flex items-center justify-center gap-2">
               {Array.from({ length: 3 }, (_, index) => (
                 <Star
                   key={index}
                   className={`h-7 w-7 ${
                     index < (levelResult?.stars ?? 0)
-                      ? "fill-[var(--lemon)] text-[var(--lemon)]"
+                      ? "fill-[var(--lemon)] text-[var(--lemon)] filter drop-shadow-[0_2px_8px_var(--glow-secondary)]"
                       : "text-[var(--panel-border)]"
                   }`}
                   strokeWidth={1.8}
@@ -155,27 +155,27 @@ export function GameDialogs({
                 return (
                   <div
                     key={mission.id}
-                    className={`flex items-center justify-between rounded-[1.1rem] border px-4 py-3 ${
+                    className={`flex items-center justify-between rounded-[1.25rem] border px-4 py-3.5 spring-transition ${
                       completed
-                        ? "border-[var(--success)]/35 bg-[color-mix(in_oklch,var(--success)_16%,transparent)]"
-                        : "border-[var(--panel-border)] bg-[var(--panel-bg)]"
+                        ? "border-[var(--success)]/35 bg-[color-mix(in_oklch,var(--success)_10%,transparent)]"
+                        : "border-[var(--panel-border)] bg-[var(--panel-bg)] hover:bg-[var(--panel-bg)]/80"
                     }`}
                   >
-                    <div>
+                    <div className="text-left">
                       <div className="text-sm font-semibold text-[var(--text-primary)]">
                         {mission.title}
                       </div>
-                      <div className="mt-1 text-sm text-[var(--text-secondary)]">
+                      <div className="mt-1 text-xs text-[var(--text-secondary)] leading-relaxed">
                         {mission.description}
                       </div>
                     </div>
                     {completed ? (
                       <CheckCircle2
-                        className="h-5 w-5 text-[var(--success)]"
+                        className="h-5 w-5 text-[var(--success)] shrink-0 ml-2"
                         strokeWidth={1.8}
                       />
                     ) : (
-                      <div className="text-xs uppercase tracking-[0.22em] text-[var(--text-muted)]">
+                      <div className="text-[0.65rem] font-bold uppercase tracking-[0.22em] text-[var(--text-muted)] shrink-0 ml-2">
                         Missed
                       </div>
                     )}

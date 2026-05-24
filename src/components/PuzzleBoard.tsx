@@ -219,6 +219,7 @@ export function PuzzleBoard({
     puzzle.level === 1 &&
     progress.easy.clearedLevels === 0 &&
     session.status === "playing";
+
   const firstRunStage: FirstRunStage =
     correctMarks === 0 ? "firstMark" : correctMarks < 3 ? "firstLine" : "rhythm";
   const boardStatusPills = getBoardStatusPills(session);
@@ -229,8 +230,8 @@ export function PuzzleBoard({
     boardStatusPills.length - visibleBoardStatusPills.length;
 
   return (
-    <div className="w-full max-w-[calc(100vw-1.25rem)] min-w-0 overflow-hidden rounded-[1.35rem] border border-[var(--panel-border)] bg-[var(--board-shell)] p-2 shadow-[inset_0_1px_0_color-mix(in_oklch,var(--surface)_55%,transparent),0_20px_44px_var(--shadow-board)] sm:max-w-none sm:rounded-[1.75rem] sm:p-4 lg:p-5">
-      <div className="mb-2 flex min-w-0 flex-nowrap items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none] sm:mb-4 sm:flex-wrap sm:gap-3 sm:overflow-visible sm:pb-0">
+    <div className="spotlight-slab w-full max-w-[calc(100vw-1.25rem)] min-w-0 overflow-hidden rounded-[2rem] border border-[var(--panel-border)] bg-[var(--board-shell)] p-3 shadow-[0_24px_60px_var(--shadow-board)] backdrop-blur-md sm:max-w-none sm:p-5 lg:p-6 transition-all duration-300">
+      <div className="mb-3 flex min-w-0 flex-nowrap items-center gap-2.5 overflow-x-auto pb-1 [scrollbar-width:none] sm:mb-5 sm:flex-wrap sm:gap-3.5 sm:overflow-visible sm:pb-0">
         <Hearts hearts={session.hearts} maxHearts={session.maxHearts} />
         {visibleBoardStatusPills.map((pill) => (
           <StatusPill key={pill.key} icon={pill.icon} tone={pill.tone}>
@@ -240,7 +241,7 @@ export function PuzzleBoard({
         {tuckedBoardStatusCount > 0 && (
           <StatusPill
             icon={
-              <span className="game-number text-[0.7rem]">
+              <span className="game-number text-[0.7rem] font-black">
                 +{tuckedBoardStatusCount}
               </span>
             }
@@ -257,9 +258,9 @@ export function PuzzleBoard({
         />
       )}
 
-      <div className="mx-auto min-w-0 max-w-full overflow-x-auto overscroll-x-contain pb-2 [container-type:inline-size] [scrollbar-width:thin]">
-        <div className="mx-auto grid w-max" style={boardStyle}>
-          <div className="rounded-[1rem] border border-dashed border-[var(--panel-border)] bg-[var(--panel-muted)]/60 sm:rounded-[1.15rem]" />
+      <div className="mx-auto min-w-0 max-w-full overflow-x-auto overscroll-x-contain pb-2 custom-scrollbar [container-type:inline-size]">
+        <div className="mx-auto grid w-max select-none" style={boardStyle}>
+          <div className="rounded-[1.1rem] border border-dashed border-[var(--panel-border)] bg-[var(--panel-muted)]/50 sm:rounded-[1.25rem] transition duration-200" />
 
           {puzzle.colTargets.map((_, col) => {
             const resolved = isColResolved(puzzle, session.marks, col);

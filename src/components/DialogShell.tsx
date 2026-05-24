@@ -61,7 +61,7 @@ export function DialogShell({
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-[oklch(15%_0.02_230/0.5)] p-3 py-6 backdrop-blur-sm sm:items-center sm:p-4">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[oklch(11%_0.015_240/0.65)] p-4 py-8 backdrop-blur-md sm:items-center sm:p-5">
       <div
         ref={dialogRef}
         role="dialog"
@@ -69,21 +69,25 @@ export function DialogShell({
         aria-labelledby={titleId}
         tabIndex={-1}
         onKeyDown={handleDialogKeyDown}
-        className={`dialog-surface max-h-[calc(100vh-2rem)] w-full overflow-y-auto rounded-[2rem] border border-[var(--panel-border)] p-5 shadow-[0_24px_80px_var(--shadow-board)] sm:p-6 ${
+        className={`dialog-surface animate-spring-in max-h-[calc(100vh-2.5rem)] w-full overflow-y-auto rounded-[2.25rem] border border-[var(--panel-border)] p-6 shadow-[0_32px_96px_var(--shadow-board)] sm:p-8 ${
           size === "lg" ? "max-w-lg" : "max-w-sm text-center"
         }`}
       >
-        {icon}
-        <h2
-          id={titleId}
-          className={`mt-4 text-3xl font-black text-[var(--text-primary)] ${
-            size === "lg" ? "text-center" : ""
-          }`}
-        >
-          {title}
-        </h2>
-        {children}
-        {actions && <div className="mt-6 grid gap-3 sm:grid-cols-2">{actions}</div>}
+        <div className="flex flex-col items-center">
+          {icon}
+          <h2
+            id={titleId}
+            className={`mt-5 text-[1.75rem] font-black leading-tight tracking-tight text-[var(--text-primary)] ${
+              size === "lg" ? "text-center" : ""
+            }`}
+          >
+            {title}
+          </h2>
+        </div>
+        <div className="mt-3 text-sm text-[var(--text-secondary)] leading-relaxed">
+          {children}
+        </div>
+        {actions && <div className="mt-7 grid gap-3 sm:grid-cols-2">{actions}</div>}
       </div>
     </div>
   );
