@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import type { KeyboardEvent, ReactNode } from "react";
+import type { KeyboardEvent, PointerEvent, ReactNode } from "react";
 import { CheckCircle2, HeartCrack, Lightbulb, Sparkles, Star, Timer, XCircle } from "lucide-react";
 import {
   computeStars,
@@ -77,9 +77,38 @@ export function DialogShell({
     }
   };
 
+  // Phones get a bottom sheet that can be dragged down to dismiss.
+  const handleDragStart = (event: PointerEvent<HTMLDivElement>) => {
+    const panel = dialogRef.current;
+    if (!onClose || !panel || window.matchMedia("(min-width: 640px)").matches) {
+      return;
+    }
+
+    const startY = event.clientY;
+    let offset = 0;
+    panel.style.transition = "none";
+    const move = (pointer: globalThis.PointerEvent) => {
+      offset = Math.max(0, pointer.clientY - startY);
+      panel.style.transform = `translateY(${offset}px)`;
+    };
+    const end = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+      panel.style.transition = "";
+      panel.style.transform = "";
+      if (offset > 90) {
+        onClose();
+      }
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+  };
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-[oklch(8%_0.02_265/0.55)] p-3 backdrop-blur-[3px] animate-[fadeIn_240ms_ease-out] sm:items-center sm:p-6"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-[oklch(8%_0.02_265/0.55)] backdrop-blur-[3px] animate-[fadeIn_240ms_ease-out] sm:items-center sm:p-6"
       onPointerDown={(event) => {
         if (event.target === event.currentTarget) {
           onClose?.();
@@ -93,10 +122,17 @@ export function DialogShell({
         aria-labelledby={titleId}
         tabIndex={-1}
         onKeyDown={handleKeyDown}
-        className={`relative w-full animate-[dialogIn_420ms_cubic-bezier(0.34,1.56,0.64,1)] rounded-[2rem] border border-white/14 bg-[oklch(19%_0.03_265/0.9)] p-6 text-white shadow-[0_30px_100px_rgb(0_0_0/0.5)] backdrop-blur-2xl sm:p-8 ${
-          wide ? "max-w-lg" : "max-w-sm"
+        className={`relative max-h-[92dvh] w-full animate-[sheetIn_380ms_cubic-bezier(0.22,1.2,0.36,1)] overflow-y-auto overscroll-contain rounded-t-[1.75rem] border-t border-white/14 bg-[oklch(19%_0.03_265/0.94)] px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-2 text-white shadow-[0_-20px_80px_rgb(0_0_0/0.45)] backdrop-blur-2xl transition-transform duration-150 sm:max-h-[calc(100dvh-3rem)] sm:animate-[dialogIn_420ms_cubic-bezier(0.34,1.56,0.64,1)] sm:rounded-[2rem] sm:border sm:p-8 sm:shadow-[0_30px_100px_rgb(0_0_0/0.5)] ${
+          wide ? "sm:max-w-lg" : "sm:max-w-sm"
         }`}
       >
+        <div
+          className="-mx-5 flex touch-none justify-center pb-3 pt-1 sm:hidden"
+          onPointerDown={handleDragStart}
+          aria-hidden="true"
+        >
+          <span className="h-1.5 w-10 rounded-full bg-white/25" />
+        </div>
         <div className="flex flex-col items-center text-center">
           {icon}
           {eyebrow && (
@@ -104,12 +140,12 @@ export function DialogShell({
               {eyebrow}
             </div>
           )}
-          <h2 id={titleId} className="mt-1 text-3xl font-bold tracking-tight">
+          <h2 id={titleId} className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
             {title}
           </h2>
         </div>
         {children}
-        {actions && <div className="mt-7 grid gap-2.5 sm:grid-cols-2">{actions}</div>}
+        {actions && <div className="mt-6 grid grid-cols-2 gap-2.5 sm:mt-7">{actions}</div>}
       </div>
     </div>
   );
@@ -181,7 +217,7 @@ export function WinDialog({
           {Array.from({ length: 3 }, (_, index) => (
             <Star
               key={index}
-              className={`${index === 1 ? "size-16 -translate-y-2" : "size-12"} ${
+              className={`${index === 1 ? "size-14 -translate-y-2 sm:size-16" : "size-10 sm:size-12"} ${
                 index < runStars
                   ? "fill-[#ffd75e] text-[#ffd75e] drop-shadow-[0_0_18px_rgb(255_215_94/0.7)]"
                   : "text-white/20"
@@ -218,7 +254,7 @@ export function WinDialog({
         </div>
       )}
 
-      <div className="mt-5 grid grid-cols-3 gap-2">
+      <div className="mt-4 grid grid-cols-3 gap-2 sm:mt-5">
         <Stat label="Hearts" value={`${session.hearts}/${session.maxHearts}`} />
         <Stat label="Hints" value={session.hintsUsed} />
         <Stat label="Mistakes" value={session.mistakes} />
@@ -230,7 +266,7 @@ export function WinDialog({
           return (
             <li
               key={mission.id}
-              className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 ${
+              className={`flex items-center justify-between gap-3 rounded-2xl border px-3.5 py-2.5 sm:px-4 sm:py-3 ${
                 done ? "border-[var(--world-accent)]/40 bg-[var(--world-accent)]/10" : "border-white/10 bg-white/5"
               }`}
             >
@@ -318,7 +354,7 @@ export function UnlockDialog({ onClose }: { onClose: () => void }) {
         </div>
       }
       actions={
-        <HapticButton type="button" onClick={onClose} className={`sm:col-span-2 ${primaryButton}`} data-autofocus>
+        <HapticButton type="button" onClick={onClose} className={`col-span-2 ${primaryButton}`} data-autofocus>
           Pick a world
         </HapticButton>
       }

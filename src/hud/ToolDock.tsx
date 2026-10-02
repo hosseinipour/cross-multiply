@@ -56,7 +56,7 @@ function ToolButton({
       onClick={onClick}
       aria-pressed={active}
       disabled={disabled}
-      className={`relative flex min-h-14 flex-1 items-center justify-center gap-2.5 rounded-[1.15rem] px-4 text-base font-bold transition duration-200 disabled:cursor-not-allowed sm:min-w-40 ${focusRing} ${
+      className={`relative flex min-h-14 flex-1 items-center justify-center gap-2.5 rounded-[1.15rem] px-4 text-base font-bold transition duration-200 disabled:cursor-not-allowed sm:min-w-40 short-land:min-h-12 short-land:w-36 short-land:min-w-0 short-land:flex-none ${focusRing} ${
         active
           ? "bg-[var(--world-accent)] text-[var(--world-accent-ink)] shadow-[inset_0_-4px_0_rgb(0_0_0/0.22),0_8px_26px_color-mix(in_oklch,var(--world-accent)_45%,transparent)]"
           : "text-white/80 hover:bg-white/10 disabled:opacity-50"
@@ -92,13 +92,13 @@ export function ToolDock({
   };
 
   return (
-    <div className="pointer-events-none flex flex-col items-center gap-2 px-3 pb-[max(0.85rem,env(safe-area-inset-bottom))] sm:pb-5">
+    <div className="pointer-events-none flex flex-col items-center gap-2 px-3 pb-[max(0.85rem,env(safe-area-inset-bottom))] sm:pb-5 short-land:p-0">
       <ComboMeter streak={streak} />
       {playing && (
         <div
           role="group"
           aria-label="Marking tool"
-          className={`pointer-events-auto flex w-full max-w-md gap-1.5 rounded-[1.5rem] p-1.5 sm:w-auto ${glass}`}
+          className={`pointer-events-auto flex w-full max-w-md gap-1.5 rounded-[1.5rem] p-1.5 sm:w-auto short-land:flex-col ${glass}`}
         >
           <ToolButton
             active={mode === "select"}

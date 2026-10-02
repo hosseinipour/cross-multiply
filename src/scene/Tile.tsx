@@ -319,7 +319,7 @@ export function Tile({
     if (shown === "selected") {
       t.color.set(theme.crystal);
       t.emissive.set(theme.crystal);
-      emissiveIntensity = 0.55 + (reducedMotion ? 0 : Math.sin(time * 2.4 + row + col) * 0.12);
+      emissiveIntensity = 0.85 + (reducedMotion ? 0 : Math.sin(time * 2.4 + row + col) * 0.15);
       roughness = 0.22;
       glowOpacity = 0.55;
       t.glowColor.set(theme.crystal);

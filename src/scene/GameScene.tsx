@@ -16,6 +16,16 @@ import type { WorldTheme } from "./worlds";
 
 const FOV = 36;
 const LOOK_AT = new Vector3(0, 0.35, 0);
+/** Render at the screen's real density; phones are often 2.5–3×. */
+const NATIVE_DPR = Math.min(window.devicePixelRatio || 1, 3);
+/** Touch screens have no hover, so pointer parallax would jolt on every tap. */
+const TOUCH_ONLY = window.matchMedia("(hover: none)").matches;
+
+/**
+ * 2: post-processing at native resolution, 1: no post-processing, 0: reduced
+ * resolution as well. Effects go first so text stays crisp as long as possible.
+ */
+type QualityTier = 0 | 1 | 2;
 
 function CameraRig({
   boardSize,
@@ -87,24 +97,29 @@ function CameraRig({
     const now = performance.now();
     const frame = getBoardFrame(boardSize);
     const rect = stage ?? { x: 0, y: 0, width: size.width, height: size.height };
+    // Portrait is width-bound, so a steeper view costs nothing vertically and
+    // keeps the numbers less foreshortened.
     const portrait = rect.height > rect.width * 1.05;
-    let elevation = ((portrait ? 64 : 55) * Math.PI) / 180;
+    let elevation = ((portrait ? 70 : 55) * Math.PI) / 180;
     let azimuth = 0;
 
     let distance = getFitDistance({
-      boardWidth: frame.width + 0.9,
+      boardWidth: frame.width + (portrait ? 0.5 : 0.9),
       boardDepth: frame.depth + 0.9,
       boardHeight: 1.6,
       elevation,
       fov: FOV,
       canvasHeight: size.height,
       stage: rect,
-      margin: portrait ? 1.08 : 1.14,
+      margin: portrait ? 1.02 : 1.1,
     });
 
     if (!reducedMotion) {
-      azimuth += state.pointer.x * 0.07 + Math.sin(state.clock.elapsedTime * 0.25) * 0.025;
-      elevation += state.pointer.y * 0.035;
+      if (!TOUCH_ONLY) {
+        azimuth += state.pointer.x * 0.07;
+        elevation += state.pointer.y * 0.035;
+      }
+      azimuth += Math.sin(state.clock.elapsedTime * 0.25) * (TOUCH_ONLY ? 0.012 : 0.025);
 
       const intro = Math.min(1, (now - m.introAt) / 1400);
       const easeOut = 1 - (1 - intro) ** 3;
@@ -166,8 +181,8 @@ export function GameScene({
   onHoverCell: Dispatch<SetStateAction<CellRef | null>>;
   onCellPress: (row: number, col: number, alternate: boolean) => void;
 }) {
-  const [quality, setQuality] = useState<"high" | "low">("high");
-  const [dpr, setDpr] = useState(() => Math.min(window.devicePixelRatio, 2));
+  const [tier, setTier] = useState<QualityTier>(2);
+  const dpr = tier === 0 ? Math.max(1, NATIVE_DPR * 0.7) : NATIVE_DPR;
 
   return (
     <Canvas
@@ -180,16 +195,10 @@ export function GameScene({
       onPointerMissed={() => onHoverCell(null)}
     >
       <PerformanceMonitor
-        onDecline={() => {
-          setQuality("low");
-          setDpr((current) => Math.max(1, current * 0.75));
-        }}
-        onIncline={() => setDpr((current) => Math.min(window.devicePixelRatio, 2, current * 1.15))}
+        onDecline={() => setTier((current) => (current > 0 ? ((current - 1) as QualityTier) : 0))}
+        onIncline={() => setTier((current) => (current === 0 ? 1 : current))}
         flipflops={3}
-        onFallback={() => {
-          setQuality("low");
-          setDpr(1);
-        }}
+        onFallback={() => setTier((current) => (current === 2 ? 1 : current))}
       />
 
       <Environment resolution={128} frames={1} environmentIntensity={0.35}>
@@ -222,9 +231,11 @@ export function GameScene({
       </Suspense>
       <Effects />
 
-      {quality === "high" && (
-        <EffectComposer multisampling={4}>
-          <Bloom mipmapBlur intensity={0.85} luminanceThreshold={0.92} luminanceSmoothing={0.18} radius={0.7} />
+      {tier === 2 && (
+        // Dense screens barely alias, and MSAA there costs a lot of fill rate.
+        <EffectComposer multisampling={NATIVE_DPR >= 2 ? 0 : 4}>
+          {/* Only emissive crystals and sparks clear this; lit tiles stay crisp. */}
+          <Bloom mipmapBlur intensity={0.9} luminanceThreshold={1.05} luminanceSmoothing={0.12} radius={0.65} />
           <Vignette offset={0.32} darkness={0.55} />
           <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
         </EffectComposer>

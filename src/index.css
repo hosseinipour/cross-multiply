@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* Phones held sideways: the HUD moves into side rails. Keep in sync with
+   SHORT_LANDSCAPE_QUERY in src/hud/Hud.tsx. */
+@custom-variant short-land (@media (orientation: landscape) and (max-height: 540px) and (max-width: 1023px));
+
 @theme {
   --font-sans: "Fredoka", ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
 }
@@ -28,6 +32,8 @@ body {
 
 button {
   cursor: pointer;
+  /* No double-tap zoom delay on buttons. */
+  touch-action: manipulation;
 }
 
 @keyframes fadeIn {
@@ -54,6 +60,12 @@ button {
   from {
     opacity: 0;
     transform: translateY(24px) scale(0.94);
+  }
+}
+
+@keyframes sheetIn {
+  from {
+    transform: translateY(100%);
   }
 }
 

@@ -73,8 +73,8 @@ export function StatusBar({ session }: { session: SessionState }) {
   const tucked = statuses.length - visible.length;
 
   return (
-    <div className="pointer-events-none flex flex-col items-center gap-2 px-3 pt-2 sm:pt-3">
-      <div className={`flex items-center gap-3 rounded-full px-4 py-2 text-sm font-semibold sm:gap-4 ${glass}`}>
+    <div className="pointer-events-none flex flex-col items-center gap-2 px-3 pt-2 sm:pt-3 short-land:items-start short-land:px-0">
+      <div className={`flex items-center gap-3 rounded-full px-4 py-2 text-sm font-semibold sm:gap-4 short-land:gap-3 ${glass}`}>
         <Hearts hearts={session.hearts} maxHearts={session.maxHearts} />
         <span className="h-4 w-px bg-white/20" aria-hidden="true" />
         <LiveTimer session={session} />
@@ -98,13 +98,17 @@ export function StatusBar({ session }: { session: SessionState }) {
       </div>
 
       {visible.length > 0 && (
-        <ul className="flex max-w-full flex-wrap justify-center gap-1.5" aria-label="Active constraints">
+        // One swipeable row on phones so chips never push the board down a line.
+        <ul
+          className="pointer-events-auto mx-auto flex w-fit max-w-full flex-nowrap gap-1.5 overflow-x-auto px-1 [scrollbar-width:none] sm:flex-wrap sm:justify-center sm:overflow-visible short-land:mx-0 short-land:justify-start short-land:px-0"
+          aria-label="Active constraints"
+        >
           {visible.map((status) => {
             const Icon = ICONS[status.icon];
             return (
               <li
                 key={status.key}
-                className={`inline-flex animate-[popIn_260ms_cubic-bezier(0.34,1.56,0.64,1)] items-center gap-1.5 rounded-full border bg-[oklch(17%_0.025_265/0.62)] px-3 py-1 text-xs font-semibold backdrop-blur-xl ${TONE_CLASSES[status.tone]}`}
+                className={`inline-flex shrink-0 animate-[popIn_260ms_cubic-bezier(0.34,1.56,0.64,1)] items-center gap-1.5 whitespace-nowrap rounded-full border bg-[oklch(17%_0.025_265/0.62)] px-3 py-1 text-xs font-semibold backdrop-blur-xl ${TONE_CLASSES[status.tone]}`}
               >
                 <Icon className="size-3.5" strokeWidth={2.2} />
                 {status.label}
@@ -112,7 +116,7 @@ export function StatusBar({ session }: { session: SessionState }) {
             );
           })}
           {tucked > 0 && (
-            <li className="inline-flex items-center rounded-full border border-white/15 bg-[oklch(17%_0.025_265/0.62)] px-3 py-1 text-xs font-semibold text-white/70 backdrop-blur-xl">
+            <li className="inline-flex shrink-0 items-center whitespace-nowrap rounded-full border border-white/15 bg-[oklch(17%_0.025_265/0.62)] px-3 py-1 text-xs font-semibold text-white/70 backdrop-blur-xl">
               +{tucked} more
             </li>
           )}

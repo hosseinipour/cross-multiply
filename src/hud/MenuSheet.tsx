@@ -74,13 +74,13 @@ export function MenuSheet({
       <HapticButton
         type="button"
         onClick={onClose}
-        className={`absolute right-5 top-5 rounded-full p-2 text-white/60 hover:bg-white/10 hover:text-white ${focusRing}`}
+        className={`absolute right-3 top-3 rounded-full p-2 sm:right-5 sm:top-5 text-white/60 hover:bg-white/10 hover:text-white ${focusRing}`}
         aria-label="Close menu"
       >
         <X className="size-5" strokeWidth={2.2} />
       </HapticButton>
 
-      <div role="tablist" className="mt-5 flex gap-1 rounded-2xl bg-white/6 p-1">
+      <div role="tablist" className="mt-4 flex gap-1 rounded-2xl bg-white/6 p-1 sm:mt-5">
         {tabs.map((item) => (
           <HapticButton
             key={item.id}
@@ -99,7 +99,7 @@ export function MenuSheet({
         ))}
       </div>
 
-      <div className="mt-5 max-h-[55vh] space-y-5 overflow-y-auto pr-1 text-left">
+      <div className="mt-4 space-y-5 text-left sm:mt-5 sm:max-h-[55vh] sm:overflow-y-auto sm:pr-1">
         {tab === "level" && (
           <>
             <MissionList session={session} progress={progress} difficulty={difficulty} />

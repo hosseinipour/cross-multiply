@@ -67,11 +67,12 @@ function getFactorRows(factors: number[]) {
   return [powers.slice(0, half).join("·"), powers.slice(half).join("·")];
 }
 
+/** As large as fits across the hex cap, which matters on phone screens. */
 function numberSize(text: string) {
-  if (text.length <= 2) return 0.46;
-  if (text.length === 3) return 0.38;
-  if (text.length <= 5) return 0.29;
-  return 0.24;
+  if (text.length <= 2) return 0.52;
+  if (text.length === 3) return 0.44;
+  if (text.length <= 5) return 0.32;
+  return 0.26;
 }
 
 export function TargetPillar({
@@ -282,7 +283,7 @@ export function TargetPillar({
       ) : (
         <Text
           font={FONT_BOLD}
-          position={[0, FACE_Y, showNeed ? -0.08 : hidden ? -0.04 : 0]}
+          position={[0, FACE_Y, showNeed ? -0.1 : hidden ? -0.04 : 0]}
           rotation={[-Math.PI / 2, 0, 0]}
           fontSize={numberSize(label)}
           letterSpacing={-0.02}
@@ -297,9 +298,9 @@ export function TargetPillar({
       {showNeed && (
         <Text
           font={FONT_BOLD}
-          position={[0, FACE_Y, 0.25]}
+          position={[0, FACE_Y, 0.27]}
           rotation={[-Math.PI / 2, 0, 0]}
-          fontSize={0.2}
+          fontSize={0.25}
           anchorX="center"
           anchorY="middle"
           color={theme.crystal}
@@ -315,8 +316,8 @@ export function TargetPillar({
           font={FONT_BOLD}
           position={[0, FACE_Y, 0.27]}
           rotation={[-Math.PI / 2, 0, 0]}
-          fontSize={0.13}
-          letterSpacing={0.18}
+          fontSize={0.15}
+          letterSpacing={0.14}
           anchorX="center"
           anchorY="middle"
           color={concealment === "blind" ? "#d65ab4" : theme.pillarInk}

@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Info, Lightbulb, ShieldAlert, Sparkles, X } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { Info, Lightbulb, ShieldAlert, Sparkles } from "lucide-react";
 import { HapticButton } from "../components/HapticButton";
 import type { Puzzle, PuzzleModifier } from "../game";
 import type { WorldTheme } from "../scene/worlds";
@@ -73,6 +73,54 @@ export function LevelBanner({ puzzle, world }: { puzzle: Puzzle; world: WorldThe
   );
 }
 
+/** Compact enough to sit above the tool dock on a phone without hiding rows. */
+function GuideCard({
+  eyebrow,
+  title,
+  body,
+  action,
+  actionLabel,
+  tone,
+  onAction,
+}: {
+  eyebrow: ReactNode;
+  title: string;
+  body: string;
+  action: string;
+  actionLabel?: string;
+  tone: string;
+  onAction: () => void;
+}) {
+  return (
+    <div
+      aria-live="polite"
+      className={`pointer-events-auto w-full max-w-sm animate-[popIn_360ms_cubic-bezier(0.34,1.56,0.64,1)] rounded-[1.25rem] px-3.5 py-3 sm:rounded-[1.4rem] sm:p-4 ${glass}`}
+      style={{ borderColor: `color-mix(in oklch, ${tone} 45%, transparent)` }}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div
+            className="flex items-center gap-1.5 text-[0.62rem] font-semibold uppercase tracking-[0.18em] sm:text-[0.68rem]"
+            style={{ color: tone }}
+          >
+            {eyebrow}
+          </div>
+          <h3 className="mt-0.5 text-base font-bold leading-tight sm:text-lg">{title}</h3>
+        </div>
+        <HapticButton
+          type="button"
+          onClick={onAction}
+          aria-label={actionLabel}
+          className={`shrink-0 rounded-full bg-white/12 px-3.5 py-1.5 text-xs font-semibold hover:bg-white/20 ${focusRing}`}
+        >
+          {action}
+        </HapticButton>
+      </div>
+      <p className="mt-1.5 text-[0.8rem] leading-snug text-white/72 sm:text-sm sm:leading-relaxed">{body}</p>
+    </div>
+  );
+}
+
 export function RuleCard({
   modifier,
   remaining,
@@ -83,34 +131,21 @@ export function RuleCard({
   onDismiss: () => void;
 }) {
   return (
-    <div
+    <GuideCard
       key={modifier.id}
-      className={`pointer-events-auto w-full max-w-sm animate-[popIn_360ms_cubic-bezier(0.34,1.56,0.64,1)] rounded-[1.4rem] border-[#59b8ff]/40 p-4 ${glass}`}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2 text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-[#9ad2ff]">
+      tone="#9ad2ff"
+      eyebrow={
+        <>
           <Sparkles className="size-3.5" strokeWidth={2.2} />
           New rule{remaining > 1 ? ` · 1 of ${remaining}` : ""}
-        </div>
-        <HapticButton
-          type="button"
-          onClick={onDismiss}
-          className={`-m-1 rounded-full p-1 text-white/60 hover:bg-white/10 hover:text-white ${focusRing}`}
-          aria-label={`Dismiss ${modifier.title} tip`}
-        >
-          <X className="size-4" strokeWidth={2.2} />
-        </HapticButton>
-      </div>
-      <h3 className="mt-1.5 text-lg font-bold">{modifier.title}</h3>
-      <p className="mt-1 text-sm leading-relaxed text-white/70">{modifier.description}</p>
-      <HapticButton
-        type="button"
-        onClick={onDismiss}
-        className={`mt-3 w-full rounded-xl bg-white/10 py-2 text-sm font-semibold hover:bg-white/16 ${focusRing}`}
-      >
-        Got it
-      </HapticButton>
-    </div>
+        </>
+      }
+      title={modifier.title}
+      body={modifier.description}
+      action="Got it"
+      actionLabel={`Dismiss ${modifier.title} tip`}
+      onAction={onDismiss}
+    />
   );
 }
 
@@ -120,7 +155,7 @@ const COACH_COPY: Record<CoachStage, { title: string; body: string; action: stri
   firstMark: {
     title: "Pick a pillar",
     body: "Each pillar shows the product its row or column must make. Tap tiles in that line whose numbers multiply to it.",
-    action: "Hide guide",
+    action: "Hide",
   },
   firstLine: {
     title: "Nice. Finish the line",
@@ -129,7 +164,7 @@ const COACH_COPY: Record<CoachStage, { title: string; body: string; action: stri
   },
   rhythm: {
     title: "You've got the rhythm",
-    body: "Chain correct picks to build a combo. Right-click or hold a tile to use the other tool. Stuck? Hints explain a step.",
+    body: "Chain correct picks to build a combo. Right-click or press and hold a tile to use the other tool. Stuck? Hints explain a step.",
     action: "Let's go",
   },
 };
@@ -138,24 +173,15 @@ export function FirstRunCoach({ stage, onDismiss }: { stage: CoachStage; onDismi
   const copy = COACH_COPY[stage];
 
   return (
-    <div
+    <GuideCard
       key={stage}
-      aria-live="polite"
-      className={`pointer-events-auto w-full max-w-sm animate-[popIn_360ms_cubic-bezier(0.34,1.56,0.64,1)] rounded-[1.4rem] border-[var(--world-accent)]/45 p-4 ${glass}`}
-    >
-      <div className="text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-[var(--world-accent)]">
-        First board
-      </div>
-      <h3 className="mt-1 text-lg font-bold">{copy.title}</h3>
-      <p className="mt-1 text-sm leading-relaxed text-white/70">{copy.body}</p>
-      <HapticButton
-        type="button"
-        onClick={onDismiss}
-        className={`mt-3 w-full rounded-xl bg-white/10 py-2 text-sm font-semibold hover:bg-white/16 ${focusRing}`}
-        aria-label="Dismiss first board guide"
-      >
-        {copy.action}
-      </HapticButton>
-    </div>
+      tone="var(--world-accent)"
+      eyebrow="First board"
+      title={copy.title}
+      body={copy.body}
+      action={copy.action}
+      actionLabel="Dismiss first board guide"
+      onAction={onDismiss}
+    />
   );
 }

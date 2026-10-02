@@ -32,7 +32,7 @@ export function TopBar({
   const muted = !settings.sfx && !settings.music;
 
   return (
-    <header className="pointer-events-auto flex items-start justify-between gap-2 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-5 sm:pt-5">
+    <header className="pointer-events-auto flex items-start justify-between gap-2 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-5 sm:pt-5 short-land:flex-col short-land:p-0">
       <HapticButton
         type="button"
         onClick={onOpenWorlds}
@@ -74,7 +74,7 @@ export function TopBar({
         </span>
       </HapticButton>
 
-      <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+      <div className="flex shrink-0 items-center gap-1.5 sm:gap-2 short-land:fixed short-land:right-[max(0.75rem,env(safe-area-inset-right))] short-land:top-3">
         <HapticButton
           type="button"
           onClick={onHint}

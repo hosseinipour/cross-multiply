@@ -71,7 +71,11 @@ export function getFitDistance({
   const projectedDepth =
     boardDepth * Math.sin(elevation) + boardHeight * Math.cos(elevation);
   const pixelsPerUnitAtOne = canvasHeight / 2 / halfTan;
-  const widthFit = (boardWidth * pixelsPerUnitAtOne) / Math.max(1, stage.width);
+  // The near edge sits closer to the camera than the centre, so it projects
+  // wider; pull back by that offset so the front row still fits.
+  const nearEdgeOffset = (boardDepth / 2) * Math.cos(elevation);
+  const widthFit =
+    (boardWidth * pixelsPerUnitAtOne) / Math.max(1, stage.width) + nearEdgeOffset;
   const depthFit = (projectedDepth * pixelsPerUnitAtOne) / Math.max(1, stage.height);
 
   return Math.max(widthFit, depthFit) * margin;

@@ -17,6 +17,10 @@ import { TopBar } from "./TopBar";
 import { glass } from "./ui";
 import { WorldSelect } from "./WorldSelect";
 
+/** Phones held sideways; mirrors the `short-land` variant in index.css. */
+const SHORT_LANDSCAPE_QUERY =
+  "(orientation: landscape) and (max-height: 540px) and (max-width: 1023px)";
+
 const TEACHING_MODIFIERS: ModifierId[] = [
   "deepFog",
   "crossBlind",
@@ -81,8 +85,18 @@ export function Hud(props: HudProps) {
       return;
     }
 
+    const sideways = window.matchMedia(SHORT_LANDSCAPE_QUERY);
     const report = () => {
       const width = window.innerWidth;
+
+      if (sideways.matches) {
+        // Rails on both sides: the board gets the full height between them.
+        const x = top.getBoundingClientRect().right + 8;
+        const end = bottom.getBoundingClientRect().left - 8;
+        onStageChange({ x, y: 8, width: Math.max(120, end - x), height: window.innerHeight - 16 });
+        return;
+      }
+
       const side = width >= 1024 ? 336 : width >= 640 ? 24 : 4;
       const y = top.getBoundingClientRect().bottom + 6;
       const end = bottom.getBoundingClientRect().top - 6;
@@ -93,9 +107,11 @@ export function Hud(props: HudProps) {
     observer.observe(top);
     observer.observe(bottom);
     window.addEventListener("resize", report);
+    sideways.addEventListener("change", report);
     return () => {
       observer.disconnect();
       window.removeEventListener("resize", report);
+      sideways.removeEventListener("change", report);
     };
   }, [onStageChange]);
 
@@ -126,7 +142,10 @@ export function Hud(props: HudProps) {
   return (
     <>
       <div className="pointer-events-none fixed inset-0 z-10 flex flex-col">
-        <div ref={topRef}>
+        <div
+          ref={topRef}
+          className="short-land:fixed short-land:left-[max(0.75rem,env(safe-area-inset-left))] short-land:top-3 short-land:w-64"
+        >
           <TopBar
             world={world}
             puzzle={puzzle}
@@ -139,6 +158,7 @@ export function Hud(props: HudProps) {
             onHint={props.onHint}
           />
           <StatusBar session={session} />
+          <div className="mt-2 hidden short-land:block">{guide}</div>
         </div>
         <div className="mt-2">
           <Toast feedback={playing ? props.feedback : null} pending={props.isPending} />
@@ -146,8 +166,11 @@ export function Hud(props: HudProps) {
 
         <div className="flex-1" />
 
-        <div ref={bottomRef}>
-          <div className="flex flex-col items-center gap-2 px-3 lg:hidden">{guide}</div>
+        <div
+          ref={bottomRef}
+          className="short-land:fixed short-land:bottom-3 short-land:right-[max(0.75rem,env(safe-area-inset-right))]"
+        >
+          <div className="flex flex-col items-center gap-2 px-3 lg:hidden short-land:hidden">{guide}</div>
           <ToolDock
             mode={session.mode}
             toolLocked={session.toolLocked}
