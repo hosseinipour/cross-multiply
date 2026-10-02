@@ -1,3 +1,5 @@
+import { Check } from "lucide-react";
+
 const formatter = new Intl.NumberFormat();
 
 function getFactorRows(factors: number[]) {
@@ -26,21 +28,39 @@ function getFactorPowers(factors: number[]) {
 }
 
 export function TargetBadge({
+  axis = "row",
   concealment = null,
   factorChips,
+  highlighted = false,
+  index,
   progressHidden = false,
   target,
   progress,
   resolved,
 }: {
+  axis?: "row" | "column";
   target: number | null;
   concealment?: "blind" | "deepFog" | "fog" | null;
   factorChips?: number[];
+  highlighted?: boolean;
+  index?: number;
   progressHidden?: boolean;
   progress: number;
   resolved: boolean;
 }) {
   const hidden = target === null;
+  const need = hidden ? null : target / progress;
+  const lineName =
+    index === undefined ? "Target" : `${axis === "row" ? "Row" : "Column"} ${index + 1}`;
+  const description = resolved
+    ? `${lineName} solved`
+    : hidden
+      ? `${lineName} target hidden`
+      : `${lineName} target ${formatter.format(target)}${
+          !progressHidden && need !== null && progress > 1
+            ? `, needs ×${formatter.format(need)} more`
+            : ""
+        }`;
   const ciphered = !hidden && Boolean(factorChips?.length);
   const hiddenLabel = concealment === "blind" ? "Blind" : "Fog";
   const factorRows = factorChips ? getFactorRows(factorChips) : [];
@@ -48,9 +68,15 @@ export function TargetBadge({
 
   return (
     <div
+      role="img"
+      aria-label={description}
       className={`game-number relative flex aspect-square items-center justify-center rounded-[1rem] border text-center spring-transition sm:rounded-[1.25rem] ${
+        highlighted && !resolved
+          ? "outline-[color-mix(in_oklch,var(--accent)_70%,transparent)]"
+          : "outline-transparent"
+      } outline outline-2 outline-offset-2 ${
         resolved
-          ? "border-transparent bg-transparent text-transparent opacity-0 scale-[0.92] pointer-events-none"
+          ? "border-transparent bg-[color-mix(in_oklch,var(--success)_10%,transparent)] text-[var(--success)] scale-[0.86]"
           : hidden
             ? concealment === "blind"
               ? "border-dashed border-[var(--berry)]/45 bg-[color-mix(in_oklch,var(--berry)_12%,transparent)] text-[var(--berry)]"
@@ -58,6 +84,14 @@ export function TargetBadge({
             : "border-[var(--target-border)] bg-[var(--target-bg)] text-[var(--text-primary)] shadow-[inset_0_-3px_0_color-mix(in_oklch,var(--target-border)_45%,transparent),0_8px_16px_var(--shadow-soft)]"
       }`}
     >
+
+      {resolved && (
+        <Check
+          aria-hidden="true"
+          className="h-[45%] w-[45%] opacity-70 [animation:goodPop_320ms_cubic-bezier(0.34,1.56,0.64,1)]"
+          strokeWidth={2.6}
+        />
+      )}
 
       {!resolved && (
         <>
@@ -94,15 +128,16 @@ export function TargetBadge({
               {hidden ? "?" : formatter.format(target)}
             </span>
           )}
-          {!hidden && progress > 1 && !progressHidden && (
+          {need !== null && progress > 1 && !progressHidden && (
             <span
-              className={`absolute rounded-full bg-[var(--accent-soft)] px-1 font-black leading-none text-[var(--accent-strong)] ${
+              aria-hidden="true"
+              className={`absolute rounded-full bg-[var(--accent-soft)] px-1 py-px font-black leading-none text-[var(--accent-strong)] ${
                 ciphered
-                  ? "hidden sm:right-1.5 sm:top-1.5 sm:block sm:text-[0.6rem]"
-                  : "right-1 top-1 text-[0.55rem] sm:right-1.5 sm:top-1.5 sm:text-[0.6rem]"
+                  ? "hidden sm:right-1 sm:top-1 sm:block sm:text-[0.7rem]"
+                  : "right-0.5 top-0.5 text-[0.62rem] sm:right-1 sm:top-1 sm:text-[0.74rem]"
               }`}
             >
-              {formatter.format(progress)}
+              {need === 1 ? "✓" : `×${formatter.format(need)}`}
             </span>
           )}
           {ciphered && (

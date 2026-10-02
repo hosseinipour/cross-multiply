@@ -1,34 +1,30 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import {
   areAllRowTargetsMet,
-  getNextCommitment,
-  getNextNoEchoLine,
   isCellBlockedByCommitment,
   isCellBlockedByNoEcho,
   isCellBlockedBySpotlight,
   isCellDelayed,
   isHintGateUnlocked,
-  isPuzzleSolved,
   revealHint,
-  type CellMark,
   type DifficultyId,
   type ToolMode,
 } from "./game";
 import {
-  applyWinResult,
+  applyCorrectMark,
+  applyMistake,
   buildSession,
   buildSessionFromPuzzle,
   getLevelResult,
-  getToolLockState,
   isDifficultyAvailable,
   loadPersistedState,
   MAX_HINT_STOCK,
+  setClockRunning,
   STORAGE_KEY,
   unlockAllDifficulties,
   type PersistedState,
   type SessionState,
   type ThemeMode,
-  type WinOptions,
 } from "./appState";
 import type { ModifierId } from "./progression";
 import {
@@ -38,6 +34,15 @@ import {
 
 const CHEAT_TOGGLE_COUNT = 10;
 const CHEAT_TOGGLE_WINDOW_MS = 4000;
+const FEEDBACK_DURATION_MS = { hint: 5200, danger: 2600, info: 3200 } as const;
+
+export type FeedbackTone = keyof typeof FEEDBACK_DURATION_MS;
+
+export type Feedback = {
+  id: number;
+  tone: FeedbackTone;
+  message: string;
+};
 
 export function useCrossMultiplyGame() {
   const [persisted, setPersisted] = useState<PersistedState>(() =>
@@ -45,7 +50,9 @@ export function useCrossMultiplyGame() {
   );
   const [unlockDialogOpen, setUnlockDialogOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
   const themeToggleTimes = useRef<number[]>([]);
+  const feedbackId = useRef(0);
 
   const {
     difficulty,
@@ -75,6 +82,39 @@ export function useCrossMultiplyGame() {
       // Private browsing, quota limits, and locked-down storage should not break play.
     }
   }, [persisted, theme]);
+
+  useEffect(() => {
+    if (!feedback) {
+      return;
+    }
+
+    const timeout = window.setTimeout(
+      () => setFeedback(null),
+      FEEDBACK_DURATION_MS[feedback.tone],
+    );
+
+    return () => window.clearTimeout(timeout);
+  }, [feedback]);
+
+  useEffect(() => {
+    // Only count solve time while the board is actually on screen.
+    const handleVisibility = () => {
+      const visible = document.visibilityState === "visible";
+
+      setPersisted((current) => {
+        const session = setClockRunning(current.session, visible, Date.now());
+        return session === current.session ? current : { ...current, session };
+      });
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, []);
+
+  const notify = (tone: FeedbackTone, message: string) => {
+    feedbackId.current += 1;
+    setFeedback({ id: feedbackId.current, tone, message });
+  };
 
   const setTheme = (nextTheme: ThemeMode) => {
     setPersisted((current) => ({
@@ -129,6 +169,7 @@ export function useCrossMultiplyGame() {
     nextSession: SessionState,
     nextDifficultyId = difficulty,
   ) => {
+    setFeedback(null);
     setPersisted((current) => ({
       ...current,
       difficulty: nextDifficultyId,
@@ -148,6 +189,7 @@ export function useCrossMultiplyGame() {
 
   const setMode = (mode: ToolMode) => {
     if (session.toolLocked && mode !== session.mode) {
+      notify("info", "Erase unlocks after you match a visible target.");
       return;
     }
 
@@ -214,52 +256,7 @@ export function useCrossMultiplyGame() {
     );
   };
 
-  const finalizeWin = (
-    nextMarks: CellMark[][],
-    options?: WinOptions,
-  ) => {
-    setPersisted((current) => applyWinResult(current, nextMarks, options));
-  };
-
-  const applyCorrectMark = (row: number, col: number, mark: CellMark) => {
-    const nextMarks = session.marks.map((line) => [...line]);
-    nextMarks[row][col] = mark;
-    const solved = isPuzzleSolved(puzzle, nextMarks);
-    const nextToolLocked = getToolLockState(puzzle, nextMarks, session.toolLocked);
-    const nextCommitment = getNextCommitment(
-      puzzle,
-      nextMarks,
-      session.activeCommitment,
-      row,
-      col,
-    );
-    const nextNoEchoLine = getNextNoEchoLine(
-      puzzle,
-      nextMarks,
-      session.noEchoLine,
-      row,
-      col,
-    );
-
-    if (solved) {
-      finalizeWin(nextMarks);
-      return;
-    }
-
-    setPersisted((current) => ({
-      ...current,
-      session: {
-        ...current.session,
-        marks: nextMarks,
-        focusKey: `${row}-${col}-${Date.now()}`,
-        toolLocked: nextToolLocked,
-        activeCommitment: nextCommitment,
-        noEchoLine: nextNoEchoLine,
-      },
-    }));
-  };
-
-  const handleCellPress = (row: number, col: number) => {
+  const handleCellPress = (row: number, col: number, toolOverride?: ToolMode) => {
     if (
       session.status !== "playing" ||
       session.marks[row][col] !== "hidden" ||
@@ -271,103 +268,115 @@ export function useCrossMultiplyGame() {
       return;
     }
 
+    const tool = toolOverride ?? session.mode;
+
+    if (session.toolLocked && tool !== session.mode) {
+      notify("info", "Erase unlocks after you match a visible target.");
+      return;
+    }
+
+    const value = puzzle.board[row][col];
     const shouldSelect = puzzle.solution[row][col];
-    const pickedMark: CellMark =
-      session.mode === "select" ? "selected" : "erased";
-    const expectedMark: CellMark = shouldSelect ? "selected" : "erased";
 
-    if (pickedMark === expectedMark) {
+    if ((tool === "select") === shouldSelect) {
       vibrateOnCorrectPick();
-      applyCorrectMark(row, col, expectedMark);
+      const { state, notices } = applyCorrectMark(
+        persisted,
+        row,
+        col,
+        shouldSelect ? "selected" : "erased",
+        "player",
+      );
+      setPersisted(state);
+
+      if (notices.length > 0) {
+        notify("info", notices.join(" "));
+      } else if (feedback?.tone === "danger") {
+        setFeedback(null);
+      }
       return;
     }
 
-    const nextHearts = session.hearts - 1;
     vibrateOnMistake();
+    const heartsLeft = session.hearts - 1;
+    setPersisted(applyMistake(persisted, row, col));
 
-    setPersisted((current) => ({
-      ...current,
-      session: {
-        ...current.session,
-        hearts: nextHearts,
-        mistakes: current.session.mistakes + 1,
-        status: nextHearts <= 0 ? "lost" : "playing",
-        focusKey: `${row}-${col}-miss-${Date.now()}`,
-      },
-    }));
+    if (heartsLeft > 0) {
+      notify(
+        "danger",
+        `${shouldSelect ? `${value} belongs in the product.` : `${value} isn't part of the product.`} ${heartsLeft} ${heartsLeft === 1 ? "heart" : "hearts"} left.`,
+      );
+    }
   };
 
-  const useHint = () => {
+  const requestHint = () => {
     if (session.status !== "playing" || hintStock <= 0 || !hintGateUnlocked) {
+      if (session.status === "playing" && hintStock <= 0) {
+        notify("info", "No hints left. Clear a level to earn one.");
+      }
       return;
     }
 
-    setPersisted((current) => {
-      const currentPuzzle = current.session.puzzle;
-
-      if (
-        current.session.status !== "playing" ||
-        current.hintStock <= 0 ||
-        !isHintGateUnlocked(currentPuzzle, current.session.marks)
-      ) {
-        return current;
-      }
-
-      const hint = revealHint(currentPuzzle, current.session.marks, {
-        activeCommitment: current.session.activeCommitment,
-        noEchoLine: current.session.noEchoLine,
-      });
-
-      if (!hint) {
-        return current;
-      }
-
-      const nextMarks = current.session.marks.map((line) => [...line]);
-      nextMarks[hint.row][hint.col] = hint.mark;
-
-      if (isPuzzleSolved(currentPuzzle, nextMarks)) {
-        return applyWinResult(current, nextMarks, {
-          runOverrides: {
-            hintsUsed: current.session.hintsUsed + 1,
-          },
-          consumeHint: true,
-        });
-      }
-
-      return {
-        ...current,
-        hintStock: Math.max(0, current.hintStock - 1),
-        session: {
-          ...current.session,
-          marks: nextMarks,
-          hintsUsed: current.session.hintsUsed + 1,
-          focusKey: `${hint.row}-${hint.col}-hint-${Date.now()}`,
-          toolLocked: getToolLockState(
-            currentPuzzle,
-            nextMarks,
-            current.session.toolLocked,
-          ),
-          activeCommitment: getNextCommitment(
-            currentPuzzle,
-            nextMarks,
-            current.session.activeCommitment,
-          ),
-          noEchoLine: getNextNoEchoLine(
-            currentPuzzle,
-            nextMarks,
-            current.session.noEchoLine,
-            hint.row,
-            hint.col,
-          ),
-        },
-      };
+    const hint = revealHint(puzzle, session.marks, {
+      activeCommitment: session.activeCommitment,
+      noEchoLine: session.noEchoLine,
     });
+
+    if (!hint) {
+      notify("info", "No open cell can take a hint right now.");
+      return;
+    }
+
+    const { state, notices } = applyCorrectMark(
+      persisted,
+      hint.row,
+      hint.col,
+      hint.mark,
+      "hint",
+    );
+    setPersisted(state);
+
+    if (state.session.status === "playing") {
+      notify("hint", [hint.reason, ...notices].join(" "));
+    }
   };
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        event.repeat ||
+        document.querySelector('[role="dialog"]')
+      ) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+
+      if (key === "s") {
+        setMode("select");
+      } else if (key === "e") {
+        setMode("erase");
+      } else if (key === "h") {
+        requestHint();
+      } else {
+        return;
+      }
+
+      event.preventDefault();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  });
 
   return {
     currentResult,
     difficulty,
     dismissedModifierTips,
+    feedback,
     hintGateUnlocked,
     hintStock,
     isPending,
@@ -387,7 +396,7 @@ export function useCrossMultiplyGame() {
     rerollLevel,
     retryLevel,
     setMode,
+    requestHint,
     toggleTheme,
-    useHint,
   };
 }

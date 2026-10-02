@@ -233,11 +233,11 @@ Navigation is game-state navigation, not site navigation. Difficulty is a horizo
 
 ### Puzzle Cell
 
-The puzzle cell is the signature component. It is square, heavy-numbered, bordered, and tactile. Resting cells use Cell Paper; hover lifts and brightens; selected cells use the Table Teal gradient, selected press shadow, and a short `goodPop` animation; erased cells become muted with a diagonal slash. Blocked cells use dashed borders, low opacity, and short bottom labels such as Seal, Cloak, Echo, or Hold.
+The puzzle cell is the signature component. It is square, heavy-numbered, bordered, and tactile. Resting cells use Cell Paper; hover lifts and brightens; selected cells use the Table Teal gradient, selected press shadow, and a short `goodPop` animation; erased cells become muted with a diagonal slash. Cells auto-cleared by a completed line play a staggered `sweepClear`; a hinted cell gets a brief lemon `hintGlow`; a miss shakes and flashes danger. Blocked cells use dashed borders, low opacity, and short bottom labels such as Seal, Cloak, Echo, or Hold.
 
 ### Target Badge
 
-Target badges are square product markers at the row and column edges. Visible targets use Target Paper and an inset bottom shadow. Hidden targets use dashed borders and either Fog/Blind labels. Ciphered targets show factor chips and a tiny "Factors" label. Resolved targets disappear without adding visual noise.
+Target badges are square product markers at the row and column edges. Visible targets use Target Paper and an inset bottom shadow, plus a small `×N` chip for the factor the line still needs once progress starts. Hidden targets use dashed borders and either Fog/Blind labels. Ciphered targets show factor chips and a tiny "Factors" label. Resolved targets shrink to a quiet success check. Hovering or keyboard-focusing a cell outlines its row and column targets.
 
 ## 6. Do's and Don'ts
 

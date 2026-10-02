@@ -264,6 +264,72 @@
   }
 }
 
+/* Leftover cells on a completed line fold away in sequence. */
+@keyframes sweepClear {
+  0% {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    opacity: 1;
+    transform: scale(1.04);
+  }
+
+  100% {
+    opacity: 0.8;
+    transform: scale(0.98);
+  }
+}
+
+@keyframes hintGlow {
+  0% {
+    opacity: 0;
+    transform: scale(1.15);
+  }
+
+  20% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  70% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  25% {
+    transform: translateX(-4px);
+  }
+
+  50% {
+    transform: translateX(4px);
+  }
+
+  75% {
+    transform: translateX(-2px);
+  }
+}
+
+@keyframes toastIn {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 @keyframes springIn {
   0% {
     opacity: 0;

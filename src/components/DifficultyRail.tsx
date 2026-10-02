@@ -67,7 +67,7 @@ export function DifficultyRail({
             }
             className={`spotlight-slab w-[8.25rem] shrink-0 snap-start rounded-[1.25rem] border p-3 text-left spring-transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] sm:w-[9.5rem] sm:rounded-[1.5rem] sm:p-4 2xl:w-[11.5rem] ${
               active
-                ? "border-[var(--accent)] bg-[var(--accent-soft)] shadow-[inset_0_-3px_0_color-mix(in_oklch,var(--accent)_28%,transparent),0_12px_24px_var(--glow-primary)] scale-[1.02]"
+                ? "border-[var(--accent)] bg-[var(--accent-soft)] shadow-[inset_0_-3px_0_color-mix(in_oklch,var(--accent)_28%,transparent),0_6px_12px_var(--glow-primary)] scale-[1.02]"
                 : "border-[var(--panel-border)] bg-[var(--panel-muted)] shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_45%,transparent)] hover:-translate-y-1 hover:border-[var(--accent)]/40 hover:bg-[var(--panel-bg)]"
             } ${!unlocked ? "cursor-not-allowed opacity-40" : ""}`}
           >

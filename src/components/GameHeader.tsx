@@ -35,7 +35,7 @@ export function GameHeader({
 
   return (
     <>
-      <div className="flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:justify-between sm:items-center sm:gap-4 border-b border-[var(--panel-border)] pb-4">
+      <div className="flex min-w-0 items-start justify-between gap-3 border-b border-[var(--panel-border)] pb-3 sm:items-center sm:gap-4 sm:pb-4">
         <div className="min-w-0 max-w-full">
           <p className="truncate text-xs font-black uppercase tracking-[0.32em] text-[var(--accent-strong)]">
             Cross Multiply
@@ -58,14 +58,14 @@ export function GameHeader({
           </div>
         </div>
 
-        <div className="flex max-w-full items-center justify-start gap-1.5 sm:justify-end sm:gap-2">
+        <div className="flex shrink-0 items-center justify-end gap-1.5 sm:gap-2">
           <IconActionButton
             type="button"
             onClick={onUseHint}
             disabled={hintStock <= 0 || sessionStatus !== "playing" || !hintGateUnlocked}
             aria-label={
               hintGateUnlocked
-                ? "Use hint"
+                ? `Use hint (H), ${hintStock} left`
                 : `Hints unlock after ${puzzle.hintGate?.unlockAfterCorrectMarks ?? 0} correct marks`
             }
           >
@@ -95,7 +95,7 @@ export function GameHeader({
         </div>
       </div>
 
-      <div className="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3 sm:gap-5 xl:grid-cols-[minmax(18rem,0.75fr)_minmax(30rem,1.25fr)] xl:items-end">
+      <div className="mt-1 grid min-w-0 sm:mt-4 grid-cols-[minmax(0,1fr)] gap-3 sm:gap-5 xl:grid-cols-[minmax(18rem,0.75fr)_minmax(30rem,1.25fr)] xl:items-end">
         <div className="min-w-0">
           <p className="hidden text-xs font-black uppercase tracking-[0.26em] text-[var(--text-muted)] sm:block">
             {difficultyConfig.label} Chapter

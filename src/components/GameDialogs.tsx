@@ -1,18 +1,59 @@
-import { CheckCircle2, Heart, Sparkles, Star } from "lucide-react";
+import { CheckCircle2, Heart, Lightbulb, Sparkles, Star, Timer } from "lucide-react";
 import {
   getLevelResult,
+  MAX_HINT_STOCK,
   type GameStatus,
   type ProgressState,
   type SessionState,
 } from "../appState";
 import type { DifficultyId, Puzzle } from "../game";
 import { DialogShell } from "./DialogShell";
+import { formatDuration } from "./formatDuration";
 import { HapticButton } from "./HapticButton";
 import { ResultStat } from "./ResultStat";
 import { primaryActionClass, secondaryActionClass } from "./uiStyles";
 
+function WinTimeLine({ session }: { session: SessionState }) {
+  const summary = session.lastWin;
+
+  if (!summary) {
+    return null;
+  }
+
+  const newBest =
+    summary.previousBestMs !== null && summary.timeMs < summary.previousBestMs;
+  const note = summary.firstClear
+    ? "First clear"
+    : newBest
+      ? `New best · was ${formatDuration(summary.previousBestMs!)}`
+      : summary.previousBestMs !== null
+        ? `Best ${formatDuration(summary.previousBestMs)}`
+        : null;
+
+  return (
+    <div className="mt-3 flex items-center justify-center gap-2 text-xs font-bold text-[var(--text-secondary)]">
+      <Timer className="h-3.5 w-3.5 text-[var(--accent-strong)]" strokeWidth={2} />
+      <span className="game-number text-sm text-[var(--text-primary)]">
+        {formatDuration(summary.timeMs)}
+      </span>
+      {note && (
+        <span
+          className={`rounded-full px-2 py-0.5 text-[0.62rem] font-black uppercase tracking-[0.14em] ${
+            newBest || summary.firstClear
+              ? "bg-[var(--accent-soft)] text-[var(--accent-strong)]"
+              : "bg-[var(--panel-bg)] text-[var(--text-muted)]"
+          }`}
+        >
+          {note}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function GameDialogs({
   difficulty,
+  hintStock,
   onCloseUnlock,
   onMoveNext,
   onReroll,
@@ -24,6 +65,7 @@ export function GameDialogs({
   unlockDialogOpen,
 }: {
   difficulty: DifficultyId;
+  hintStock: number;
   onCloseUnlock: () => void;
   onMoveNext: () => void;
   onReroll: () => void;
@@ -35,6 +77,8 @@ export function GameDialogs({
   unlockDialogOpen: boolean;
 }) {
   const levelResult = getLevelResult(progress, difficulty, puzzle.level);
+  const totalCells = puzzle.size * puzzle.size;
+  const placedCells = session.marks.flat().filter((mark) => mark !== "hidden").length;
 
   return (
     <>
@@ -59,6 +103,7 @@ export function GameDialogs({
                 type="button"
                 onClick={onReroll}
                 className={primaryActionClass}
+                data-autofocus
               >
                 New board
               </HapticButton>
@@ -66,7 +111,11 @@ export function GameDialogs({
           }
         >
           <p className="mt-2 text-sm text-[var(--text-secondary)]">
-            You used every heart. Retry this board, or start a new layout for the same level.
+            You placed{" "}
+            <span className="game-number text-[var(--text-primary)]">
+              {placedCells}/{totalCells}
+            </span>{" "}
+            cells before the hearts ran out. Retry this board with what you learned, or try a new layout for the same level.
           </p>
         </DialogShell>
       )}
@@ -117,6 +166,7 @@ export function GameDialogs({
                 type="button"
                 onClick={onMoveNext}
                 className={primaryActionClass}
+                data-autofocus
               >
                 Next level
               </HapticButton>
@@ -126,6 +176,7 @@ export function GameDialogs({
           <p className="mt-2 text-center text-sm text-[var(--text-secondary)]">
             Your best result for this level now includes these stars and missions.
           </p>
+          <WinTimeLine session={session} />
 
           <div className="mt-6 rounded-[1.75rem] border border-[var(--panel-border)] bg-[var(--panel-muted)]/50 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_12px_28px_var(--shadow-soft)]">
             <div className="flex items-center justify-center gap-2">
@@ -146,6 +197,12 @@ export function GameDialogs({
               <ResultStat label="Hints" value={session.hintsUsed} />
               <ResultStat label="Mistakes" value={session.mistakes} />
             </div>
+            {hintStock < MAX_HINT_STOCK && (
+              <div className="mt-3 flex items-center justify-center gap-1.5 text-xs font-bold text-[var(--text-secondary)]">
+                <Lightbulb className="h-3.5 w-3.5 text-[var(--accent-pop)]" strokeWidth={2} />
+                Next level adds a hint to your stock
+              </div>
+            )}
 
             <div className="mt-4 space-y-3">
               {puzzle.missions.map((mission) => {

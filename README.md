@@ -10,8 +10,11 @@ The game is designed for quick, focused sessions: generated levels, escalating d
 - Five difficulty tracks: Easy, Medium, Hard, Expert, and Mythic
 - Progressive modifiers such as fogged targets, locked cells, sealed cells, tool locks, commit lines, cross-blind boards, and factor ciphers
 - Missions for flawless runs, no-hint clears, and row-first play
+- Explained hints that reveal a logically deducible cell and say why
+- Matched lines clear their leftover cells automatically
+- Solve timer with a personal best per level
 - Hint stock, heart limits, retry/reroll flow, and level progression
-- Local save state with `localStorage`
+- Local save state with `localStorage`, including the in-progress board
 - Installable PWA with auto-updating service worker assets
 - Responsive touch-friendly interface with light and dark themes
 
@@ -87,6 +90,18 @@ public/                      PWA icons and static assets
 ## Game Rules
 
 Each puzzle board contains numbers in a grid. Row and column targets show the product the selected cells on that line must make. Use Select for cells that belong in the product and Erase for cells that do not. A puzzle is solved when every cell is correctly marked.
+
+Once you start a line, its target shows a small `×N` chip with the factor it still needs. When a visible target is met, the rest of that line is erased for you.
+
+### Controls
+
+| Action | Mouse / touch | Keyboard |
+| --- | --- | --- |
+| Mark with the current tool | Click / tap | Enter or Space |
+| Mark with the other tool | Right-click / long-press | X |
+| Switch tool | Tool buttons | S (Select), E (Erase) |
+| Use a hint | Lightbulb button | H |
+| Move between cells | | Arrow keys |
 
 Higher difficulties add constraints that change how information is revealed or how the player can move through the board. The generator checks candidate boards so puzzle targets resolve to a single solution.
 

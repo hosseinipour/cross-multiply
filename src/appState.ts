@@ -1,14 +1,23 @@
 import {
   applyRevealedMarks,
+  areAllRowTargetsMet,
+  autoResolveMatchedLines,
   createEmptyMarks,
   createPuzzle,
+  describeUnlocks,
   DIFFICULTIES,
   DIFFICULTY_ORDER,
+  getNextCommitment,
+  getNextNoEchoLine,
   hasVisibleMatchedTarget,
+  isPuzzleConsistent,
+  isPuzzleSolved,
   type ActiveCommitment,
   type CellMark,
+  type DelayedCell,
   type DifficultyId,
   type Puzzle,
+  type TargetAxis,
   type ToolMode,
 } from "./game";
 import {
@@ -38,6 +47,13 @@ export type LevelResult = {
   stars: number;
   missionsCompleted: MissionId[];
   bestRun: RunSummary;
+  bestTimeMs?: number;
+};
+
+export type WinSummary = {
+  timeMs: number;
+  previousBestMs: number | null;
+  firstClear: boolean;
 };
 
 export type DifficultyProgress = {
@@ -62,6 +78,12 @@ export type SessionState = {
   toolLocked: boolean;
   activeCommitment: ActiveCommitment | null;
   noEchoLine: ActiveCommitment | null;
+  /** Solve time banked so far; the live segment runs from `activeSince`. */
+  elapsedMs: number;
+  activeSince: number | null;
+  /** Cells erased automatically by the last move, for the sweep animation. */
+  autoCleared: DelayedCell[];
+  lastWin: WinSummary | null;
 };
 
 export type PersistedState = {
@@ -80,6 +102,7 @@ export const STARTING_HINTS = 3;
 export const MAX_HINT_STOCK = 10;
 
 const MAX_PROGRESS_LEVEL = 10000;
+const MAX_TIME_MS = 24 * 60 * 60 * 1000;
 const MISSION_IDS = Object.keys(MISSION_DETAILS) as MissionId[];
 
 export function createProgressState(): ProgressState {
@@ -123,7 +146,37 @@ export function buildSessionFromPuzzle(puzzle: Puzzle): SessionState {
     toolLocked: Boolean(puzzle.toolLock),
     activeCommitment: null,
     noEchoLine: null,
+    elapsedMs: 0,
+    activeSince: Date.now(),
+    autoCleared: [],
+    lastWin: null,
   };
+}
+
+export function foldElapsed(session: SessionState, now: number) {
+  const segment =
+    session.activeSince === null ? 0 : Math.max(0, now - session.activeSince);
+
+  return Math.min(MAX_TIME_MS, session.elapsedMs + segment);
+}
+
+/** Pauses or resumes the solve clock, e.g. when the tab is hidden. */
+export function setClockRunning(
+  session: SessionState,
+  running: boolean,
+  now: number,
+): SessionState {
+  if (session.status !== "playing") {
+    return session.activeSince === null
+      ? session
+      : { ...session, activeSince: null };
+  }
+
+  if (running) {
+    return session.activeSince === null ? { ...session, activeSince: now } : session;
+  }
+
+  return { ...session, elapsedMs: foldElapsed(session, now), activeSince: null };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -179,10 +232,106 @@ function sanitizeLevelResult(value: unknown): LevelResult | null {
       )
     : [];
 
+  const bestTimeMs = clampInteger(value.bestTimeMs, 0, 0, MAX_TIME_MS);
+
   return {
     stars: clampInteger(value.stars, 1, 1, 3),
     missionsCompleted,
     bestRun: sanitizeRunSummary(value.bestRun),
+    ...(bestTimeMs > 0 ? { bestTimeMs } : {}),
+  };
+}
+
+const CELL_MARKS = new Set<unknown>(["hidden", "selected", "erased"]);
+
+function sanitizeLine(value: unknown, size: number): ActiveCommitment | null {
+  if (
+    !isRecord(value) ||
+    (value.axis !== "row" && value.axis !== "column") ||
+    !Number.isInteger(value.index) ||
+    (value.index as number) < 0 ||
+    (value.index as number) >= size
+  ) {
+    return null;
+  }
+
+  return { axis: value.axis as TargetAxis, index: value.index as number };
+}
+
+/**
+ * Restores an in-progress board from storage so a reload does not throw
+ * away a half-solved puzzle. Anything that does not check out falls back to
+ * a fresh board.
+ */
+function sanitizeSession(
+  value: unknown,
+  difficulty: DifficultyId,
+  maxLevel: number,
+): SessionState | null {
+  if (!isRecord(value) || value.status !== "playing" || !isRecord(value.puzzle)) {
+    return null;
+  }
+
+  const puzzle = value.puzzle as unknown as Puzzle;
+
+  if (
+    puzzle.difficulty !== difficulty ||
+    puzzle.size !== DIFFICULTIES[difficulty].size ||
+    !Number.isInteger(puzzle.level) ||
+    puzzle.level < 1 ||
+    puzzle.level > maxLevel ||
+    !Array.isArray(puzzle.modifiers) ||
+    !Array.isArray(puzzle.missions) ||
+    !Number.isInteger(puzzle.maxHearts) ||
+    puzzle.maxHearts < 1 ||
+    !isPuzzleConsistent(puzzle)
+  ) {
+    return null;
+  }
+
+  const marks = value.marks;
+
+  if (
+    !Array.isArray(marks) ||
+    marks.length !== puzzle.size ||
+    !marks.every(
+      (line, row) =>
+        Array.isArray(line) &&
+        line.length === puzzle.size &&
+        line.every(
+          (mark, col) =>
+            CELL_MARKS.has(mark) &&
+            (mark === "hidden" || (mark === "selected") === puzzle.solution[row][col]),
+        ),
+    )
+  ) {
+    return null;
+  }
+
+  const base = buildSessionFromPuzzle(puzzle);
+  const typedMarks = marks as CellMark[][];
+  const toolLocked = getToolLockState(puzzle, typedMarks, Boolean(puzzle.toolLock));
+
+  return {
+    ...base,
+    marks: typedMarks,
+    hearts: clampInteger(value.hearts, base.maxHearts, 1, base.maxHearts),
+    mode: !toolLocked && value.mode === "erase" ? "erase" : base.mode,
+    hintsUsed: clampInteger(value.hintsUsed, 0, 0),
+    mistakes: clampInteger(value.mistakes, 0, 0),
+    eraseUsedBeforeRowsResolved: Boolean(value.eraseUsedBeforeRowsResolved),
+    toolLocked,
+    activeCommitment: getNextCommitment(
+      puzzle,
+      typedMarks,
+      sanitizeLine(value.activeCommitment, puzzle.size),
+    ),
+    noEchoLine: getNextNoEchoLine(
+      puzzle,
+      typedMarks,
+      sanitizeLine(value.noEchoLine, puzzle.size),
+    ),
+    elapsedMs: clampInteger(value.elapsedMs, 0, 0, MAX_TIME_MS),
   };
 }
 
@@ -365,7 +514,12 @@ export function loadPersistedState(): PersistedState {
           ? Math.max(0, Math.min(MAX_HINT_STOCK, parsed.hintStock))
           : STARTING_HINTS,
       progress: nextProgress,
-      session: buildSession(difficulty, level),
+      session:
+        sanitizeSession(
+          parsed.session,
+          difficulty,
+          nextProgress[difficulty].highestUnlockedLevel,
+        ) ?? buildSession(difficulty, level),
       dismissedModifierTips: parsed.dismissedModifierTips ?? {},
       onboardingDismissed: Boolean(parsed.onboardingDismissed),
     };
@@ -447,9 +601,10 @@ function isBetterRun(candidate: LevelResult, previous?: LevelResult) {
 export function applyWinResult(
   current: PersistedState,
   nextMarks: CellMark[][],
-  options?: WinOptions,
+  options?: WinOptions & { now?: number },
 ): PersistedState {
   const currentSession = current.session;
+  const timeMs = foldElapsed(currentSession, options?.now ?? Date.now());
   const currentPuzzle = currentSession.puzzle;
   const currentDifficulty = current.difficulty;
   const run: RunSummary = {
@@ -472,11 +627,17 @@ export function applyWinResult(
   const currentDifficultyProgress = nextProgress[currentDifficulty];
   const previous =
     currentDifficultyProgress.levelResults[String(currentPuzzle.level)];
+  const previousBestMs = previous?.bestTimeMs ?? null;
+  const bestTimeMs =
+    timeMs > 0
+      ? Math.min(previousBestMs ?? Number.POSITIVE_INFINITY, timeMs)
+      : previousBestMs;
   const levelResults = {
     ...currentDifficultyProgress.levelResults,
-    [String(currentPuzzle.level)]: isBetterRun(result, previous)
-      ? result
-      : previous,
+    [String(currentPuzzle.level)]: {
+      ...(isBetterRun(result, previous) ? result : previous),
+      ...(bestTimeMs ? { bestTimeMs } : {}),
+    },
   };
   const clearedLevels = Object.keys(levelResults).length;
 
@@ -501,6 +662,116 @@ export function applyWinResult(
       marks: nextMarks,
       hintsUsed: run.hintsUsed,
       status: "won",
+      elapsedMs: timeMs,
+      activeSince: null,
+      lastWin: {
+        timeMs,
+        previousBestMs,
+        firstClear: !previous,
+      },
+    },
+  };
+}
+
+export type MoveSource = "player" | "hint";
+
+/**
+ * Places a known-correct mark, auto-clears any lines it completes, updates
+ * every line constraint, and settles a win. Returns one-line notices for any
+ * modifier gates that opened.
+ */
+export function applyCorrectMark(
+  current: PersistedState,
+  row: number,
+  col: number,
+  mark: Exclude<CellMark, "hidden">,
+  source: MoveSource,
+  now = Date.now(),
+): { state: PersistedState; notices: string[] } {
+  const session = current.session;
+  const puzzle = session.puzzle;
+  const placed = session.marks.map((line) => [...line]);
+  placed[row][col] = mark;
+
+  const { marks: nextMarks, cleared } = autoResolveMatchedLines(puzzle, placed);
+  const fromHint = source === "hint";
+  const hintsUsed = session.hintsUsed + (fromHint ? 1 : 0);
+  const hintStock = fromHint
+    ? Math.max(0, current.hintStock - 1)
+    : current.hintStock;
+  const eraseUsedBeforeRowsResolved =
+    session.eraseUsedBeforeRowsResolved ||
+    (!fromHint && mark === "erased" && !areAllRowTargetsMet(puzzle, session.marks));
+  const nextSession: SessionState = {
+    ...session,
+    hintsUsed,
+    eraseUsedBeforeRowsResolved,
+    autoCleared: cleared,
+  };
+
+  if (isPuzzleSolved(puzzle, nextMarks)) {
+    return {
+      state: applyWinResult(
+        { ...current, hintStock, session: nextSession },
+        nextMarks,
+        { now },
+      ),
+      notices: [],
+    };
+  }
+
+  const toolLocked = getToolLockState(puzzle, nextMarks, session.toolLocked);
+  const notices = describeUnlocks(puzzle, session.marks, nextMarks);
+
+  if (session.toolLocked && !toolLocked) {
+    notices.unshift("Erase unlocked.");
+  }
+
+  return {
+    state: {
+      ...current,
+      hintStock,
+      session: {
+        ...nextSession,
+        marks: nextMarks,
+        focusKey: `${row}-${col}-${fromHint ? "hint-" : ""}${now}`,
+        toolLocked,
+        activeCommitment: fromHint
+          ? getNextCommitment(puzzle, nextMarks, session.activeCommitment)
+          : getNextCommitment(puzzle, nextMarks, session.activeCommitment, row, col),
+        noEchoLine: getNextNoEchoLine(
+          puzzle,
+          nextMarks,
+          session.noEchoLine,
+          row,
+          col,
+        ),
+      },
+    },
+    notices,
+  };
+}
+
+export function applyMistake(
+  current: PersistedState,
+  row: number,
+  col: number,
+  now = Date.now(),
+): PersistedState {
+  const session = current.session;
+  const hearts = session.hearts - 1;
+  const lost = hearts <= 0;
+
+  return {
+    ...current,
+    session: {
+      ...session,
+      hearts,
+      mistakes: session.mistakes + 1,
+      status: lost ? "lost" : "playing",
+      focusKey: `${row}-${col}-miss-${now}`,
+      autoCleared: [],
+      ...(lost ? { elapsedMs: foldElapsed(session, now), activeSince: null } : {}),
     },
   };
 }

@@ -18,7 +18,7 @@ export function FirstRunCoach({
     },
     firstLine: {
       title: "Good mark. Complete the target",
-      body: "When your selected numbers multiply to the edge target, that line clears. Erase numbers that do not fit.",
+      body: "The small ×chip shows what the line still needs. Once it is met, the leftover cells clear on their own.",
       action: "Got it",
     },
     rhythm: {
@@ -38,11 +38,11 @@ export function FirstRunCoach({
     },
     {
       icon: <Eraser className="h-4 w-4 text-[var(--text-muted)]" strokeWidth={1.8} />,
-      label: "Erase extras",
+      label: "Hold or right-click to erase",
     },
     {
       icon: <Lightbulb className="h-4 w-4 text-[var(--accent-pop)]" strokeWidth={1.8} />,
-      label: "Hint reveals one cell",
+      label: "Hints explain a step",
     },
   ];
 

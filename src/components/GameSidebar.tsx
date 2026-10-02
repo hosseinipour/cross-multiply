@@ -125,6 +125,25 @@ export function GameSidebar({
               icon={<CheckCircle2 className="h-5 w-5" strokeWidth={1.8} />}
             />
           </div>
+          <div className="mt-4 flex flex-wrap gap-x-3 gap-y-1.5 text-[0.7rem] font-semibold text-[var(--text-muted)]">
+            {[
+              ["S", "Select"],
+              ["E", "Erase"],
+              ["H", "Hint"],
+              ["X", "Other tool"],
+              ["←↑↓→", "Move"],
+            ].map(([key, label]) => (
+              <span key={key} className="inline-flex items-center gap-1.5">
+                <kbd className="game-number rounded-md border border-[var(--panel-border)] bg-[var(--panel-muted)] px-1.5 py-0.5 text-[0.65rem] text-[var(--text-secondary)] shadow-[inset_0_-1px_0_var(--panel-border)]">
+                  {key}
+                </kbd>
+                {label}
+              </span>
+            ))}
+          </div>
+          <p className="mt-2.5 text-[0.7rem] leading-relaxed text-[var(--text-muted)]">
+            Right-click a cell to mark it with the other tool.
+          </p>
         </div>
       </div>
 
@@ -168,7 +187,7 @@ export function GameSidebar({
 
                 {puzzle.modifiers.length === 0 ? (
                   <div className="rounded-[1.25rem] border border-[var(--panel-border)] bg-[var(--panel-muted)]/45 px-4 py-4 text-xs font-semibold leading-relaxed text-[var(--text-secondary)]">
-                    No active modifiers. Locate cells that multiply to the targets, and mark others as erased.
+                    No active modifiers. Select the cells that multiply to each edge target. Once a target is met, the rest of that line clears itself.
                   </div>
                 ) : (
                   <div className="space-y-3">

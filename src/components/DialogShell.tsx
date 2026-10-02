@@ -22,9 +22,11 @@ export function DialogShell({
       document.activeElement instanceof HTMLElement
         ? document.activeElement
         : null;
-    const firstFocusable = dialogRef.current?.querySelector<HTMLElement>(
-      'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-    );
+    const firstFocusable =
+      dialogRef.current?.querySelector<HTMLElement>("[data-autofocus]") ??
+      dialogRef.current?.querySelector<HTMLElement>(
+        'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
 
     (firstFocusable ?? dialogRef.current)?.focus();
 

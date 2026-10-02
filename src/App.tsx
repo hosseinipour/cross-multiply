@@ -40,7 +40,7 @@ function App() {
       </div>
 
       <main className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-[86rem] flex-col px-3 pb-24 pt-3 sm:px-6 sm:pb-28 sm:pt-6 lg:px-8">
-        <div className="puzzle-surface relative flex flex-col gap-5 rounded-[2rem] border border-[var(--panel-border)] p-4 shadow-[0_24px_80px_var(--shadow-board)] backdrop-blur-md sm:gap-6 sm:p-6 lg:p-8">
+        <div className="puzzle-surface relative flex flex-col gap-4 rounded-[1.75rem] border border-[var(--panel-border)] p-3 shadow-[0_24px_80px_var(--shadow-board)] backdrop-blur-md sm:gap-6 sm:rounded-[2rem] sm:p-6 lg:p-8">
 
           <GameHeader
             currentResult={game.currentResult}
@@ -50,7 +50,7 @@ function App() {
             onChangeDifficulty={game.changeDifficulty}
             onReroll={game.rerollCurrentBoard}
             onToggleTheme={game.toggleTheme}
-            onUseHint={game.useHint}
+            onUseHint={game.requestHint}
             progress={game.progress}
             puzzle={game.puzzle}
             sessionStatus={game.session.status}
@@ -98,10 +98,14 @@ function App() {
           />
         )}
 
-        <ActionToast isPending={game.isPending} status={game.session.status} />
+        <ActionToast
+          feedback={game.session.status === "playing" ? game.feedback : null}
+          isPending={game.isPending}
+        />
 
         <GameDialogs
           difficulty={game.difficulty}
+          hintStock={game.hintStock}
           onCloseUnlock={game.closeUnlockDialog}
           onMoveNext={game.moveToNextLevel}
           onReroll={game.rerollLevel}

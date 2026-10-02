@@ -1820,48 +1820,15 @@ export function revealHint(
     activeCommitment?: ActiveCommitment | null;
     noEchoLine?: ActiveCommitment | null;
   } = {},
-): { row: number; col: number; mark: CellMark } | null {
-  const candidates = shuffle(
-    marks.flatMap((line, row) =>
-      line
-        .map((mark, col) => ({ row, col, mark }))
-        .filter(({ mark }) => mark === "hidden")
-        .filter(({ row: candidateRow, col: candidateCol }) =>
-          !isCellLocked(puzzle, candidateRow, candidateCol),
-        )
-        .filter(
-          ({ row: candidateRow, col: candidateCol }) =>
-            !isCellDelayed(puzzle, marks, candidateRow, candidateCol),
-        )
-        .filter(
-          ({ row: candidateRow, col: candidateCol }) =>
-            !isCellBlockedBySpotlight(
-              puzzle,
-              marks,
-              candidateRow,
-              candidateCol,
-            ),
-        )
-        .filter(
-          ({ row: candidateRow, col: candidateCol }) =>
-            !isCellBlockedByCommitment(
-              options.activeCommitment ?? null,
-              candidateRow,
-              candidateCol,
-            ),
-        )
-        .filter(
-          ({ row: candidateRow, col: candidateCol }) =>
-            !isCellBlockedByNoEcho(
-              options.noEchoLine ?? null,
-              candidateRow,
-              candidateCol,
-            ),
-        ),
-    ),
-  );
+): Hint | null {
+  const candidates = getHintCandidates(puzzle, marks, options);
+  const logicalHint = findLogicalHint(puzzle, marks, candidates);
 
-  const choice = candidates[0];
+  if (logicalHint) {
+    return logicalHint;
+  }
+
+  const choice = shuffle(candidates)[0];
 
   if (!choice) {
     return null;
@@ -1871,5 +1838,332 @@ export function revealHint(
     row: choice.row,
     col: choice.col,
     mark: puzzle.solution[choice.row][choice.col] ? "selected" : "erased",
+    reason: "No single line settles a cell yet, so one cell was revealed.",
+  };
+}
+
+export type LineRef = {
+  axis: TargetAxis;
+  index: number;
+};
+
+export type Hint = {
+  row: number;
+  col: number;
+  mark: Exclude<CellMark, "hidden">;
+  reason: string;
+};
+
+export function getLineLabel(axis: TargetAxis, index: number) {
+  return `${axis === "row" ? "Row" : "Column"} ${index + 1}`;
+}
+
+function getLineCells(size: number, axis: TargetAxis, index: number) {
+  return Array.from({ length: size }, (_, offset) =>
+    axis === "row" ? { row: index, col: offset } : { row: offset, col: index },
+  );
+}
+
+export function getLineRemaining(
+  puzzle: Puzzle,
+  marks: CellMark[][],
+  axis: TargetAxis,
+  index: number,
+) {
+  const target = axis === "row" ? puzzle.rowTargets[index] : puzzle.colTargets[index];
+  const progress =
+    axis === "row"
+      ? getRowProgress(puzzle, marks, index)
+      : getColProgress(puzzle, marks, index);
+
+  return target / progress;
+}
+
+export function isPuzzleConsistent(puzzle: Puzzle) {
+  const { size, board, solution, rowTargets, colTargets } = puzzle;
+  const isGrid = <T>(grid: unknown, check: (value: unknown) => value is T) =>
+    Array.isArray(grid) &&
+    grid.length === size &&
+    grid.every(
+      (line) => Array.isArray(line) && line.length === size && line.every(check),
+    );
+  const isPositiveInt = (value: unknown): value is number =>
+    Number.isInteger(value) && (value as number) >= 2;
+  const isBool = (value: unknown): value is boolean => typeof value === "boolean";
+
+  if (
+    !Number.isInteger(size) ||
+    size < 2 ||
+    !isGrid(board, isPositiveInt) ||
+    !isGrid(solution, isBool) ||
+    !Array.isArray(rowTargets) ||
+    !Array.isArray(colTargets)
+  ) {
+    return false;
+  }
+
+  const expected = getLineProducts(board, solution);
+
+  return (
+    expected.rowTargets.every((target, index) => rowTargets[index] === target) &&
+    expected.colTargets.every((target, index) => colTargets[index] === target)
+  );
+}
+
+/**
+ * Erases the leftover hidden cells on every line whose visible target is
+ * already matched. Repeats until stable because erasing can lift fog on
+ * crossing lines. Delayed cells stay untouched until they unlock.
+ */
+export function autoResolveMatchedLines(puzzle: Puzzle, marks: CellMark[][]) {
+  let nextMarks = marks;
+  const cleared: DelayedCell[] = [];
+  let changed = true;
+
+  while (changed) {
+    changed = false;
+
+    for (const axis of ["row", "column"] as const) {
+      for (let index = 0; index < puzzle.size; index += 1) {
+        if (
+          getVisibleTarget(puzzle, nextMarks, axis, index) === null ||
+          !isLineTargetMatched(puzzle, nextMarks, axis, index)
+        ) {
+          continue;
+        }
+
+        for (const { row, col } of getLineCells(puzzle.size, axis, index)) {
+          if (
+            nextMarks[row][col] !== "hidden" ||
+            puzzle.solution[row][col] ||
+            isCellDelayed(puzzle, nextMarks, row, col)
+          ) {
+            continue;
+          }
+
+          if (nextMarks === marks) {
+            nextMarks = marks.map((line) => [...line]);
+          }
+
+          nextMarks[row][col] = "erased";
+          cleared.push({ row, col });
+          changed = true;
+        }
+      }
+    }
+  }
+
+  return { marks: nextMarks, cleared };
+}
+
+/**
+ * Describes modifier gates that opened between two board states, so the UI
+ * can announce them at the moment they matter.
+ */
+export function describeUnlocks(
+  puzzle: Puzzle,
+  previousMarks: CellMark[][],
+  nextMarks: CellMark[][],
+) {
+  const messages: string[] = [];
+  const opened = (before: boolean, after: boolean) => !before && after;
+
+  if (
+    puzzle.hintGate &&
+    opened(
+      isHintGateUnlocked(puzzle, previousMarks),
+      isHintGateUnlocked(puzzle, nextMarks),
+    )
+  ) {
+    messages.push("Hints unlocked.");
+  }
+
+  const spotlightBefore = getSpotlightProgress(puzzle, previousMarks);
+  const spotlightAfter = getSpotlightProgress(puzzle, nextMarks);
+  if (
+    spotlightBefore &&
+    spotlightAfter &&
+    opened(spotlightBefore.complete, spotlightAfter.complete)
+  ) {
+    messages.push("Spotlight done. The whole board is open.");
+  }
+
+  for (const [group, message] of [
+    [puzzle.sealedCells, "Sealed cells are open."],
+    [puzzle.cloakedCells, "Cloaked cells revealed."],
+  ] as const) {
+    if (
+      group &&
+      opened(
+        isDelayedGroupUnlocked(puzzle, previousMarks, group),
+        isDelayedGroupUnlocked(puzzle, nextMarks, group),
+      )
+    ) {
+      messages.push(message);
+    }
+  }
+
+  if (
+    puzzle.crossBlind &&
+    isCrossBlindAxisHidden(puzzle, previousMarks, puzzle.crossBlind.hiddenAxis) &&
+    !isCrossBlindAxisHidden(puzzle, nextMarks, puzzle.crossBlind.hiddenAxis)
+  ) {
+    messages.push(
+      `${puzzle.crossBlind.hiddenAxis === "row" ? "Row" : "Column"} targets revealed.`,
+    );
+  }
+
+  if (
+    puzzle.factorCipher &&
+    isTargetCiphered(puzzle, previousMarks, puzzle.factorCipher.axis) &&
+    !isTargetCiphered(puzzle, nextMarks, puzzle.factorCipher.axis)
+  ) {
+    messages.push("Factor cipher decoded.");
+  }
+
+  return messages;
+}
+
+type HintCandidate = { row: number; col: number };
+
+function getHintCandidates(
+  puzzle: Puzzle,
+  marks: CellMark[][],
+  options: {
+    activeCommitment?: ActiveCommitment | null;
+    noEchoLine?: ActiveCommitment | null;
+  },
+): HintCandidate[] {
+  return marks.flatMap((line, row) =>
+    line
+      .map((mark, col) => ({ row, col, mark }))
+      .filter(
+        ({ row: cellRow, col: cellCol, mark }) =>
+          mark === "hidden" &&
+          !isCellLocked(puzzle, cellRow, cellCol) &&
+          !isCellDelayed(puzzle, marks, cellRow, cellCol) &&
+          !isCellBlockedBySpotlight(puzzle, marks, cellRow, cellCol) &&
+          !isCellBlockedByCommitment(
+            options.activeCommitment ?? null,
+            cellRow,
+            cellCol,
+          ) &&
+          !isCellBlockedByNoEcho(options.noEchoLine ?? null, cellRow, cellCol),
+      )
+      .map(({ row: cellRow, col: cellCol }) => ({ row: cellRow, col: cellCol })),
+  );
+}
+
+/**
+ * Finds a cell that can be decided from a single visible line, preferring the
+ * simplest explanation. Returns null when every remaining deduction needs
+ * information from more than one line.
+ */
+export function findLogicalHint(
+  puzzle: Puzzle,
+  marks: CellMark[][],
+  candidates: HintCandidate[],
+): Hint | null {
+  const candidateKeys = new Set(candidates.map(({ row, col }) => `${row}-${col}`));
+  const found: Array<Hint & { priority: number }> = [];
+
+  for (const axis of ["row", "column"] as const) {
+    for (let index = 0; index < puzzle.size; index += 1) {
+      if (getVisibleTarget(puzzle, marks, axis, index) === null) {
+        continue;
+      }
+
+      const need = getLineRemaining(puzzle, marks, axis, index);
+      const cells = getLineCells(puzzle.size, axis, index).filter(
+        ({ row, col }) => marks[row][col] === "hidden",
+      );
+      const values = cells.map(({ row, col }) => puzzle.board[row][col]);
+      const combos: number[] = [];
+
+      for (let mask = 0; mask < 1 << cells.length; mask += 1) {
+        let total = 1;
+
+        for (let bit = 0; bit < cells.length; bit += 1) {
+          if (mask & (1 << bit)) {
+            total *= values[bit];
+          }
+        }
+
+        if (total === need) {
+          combos.push(mask);
+        }
+      }
+
+      if (combos.length === 0) {
+        continue;
+      }
+
+      const label = getLineLabel(axis, index);
+
+      cells.forEach(({ row, col }, bit) => {
+        if (!candidateKeys.has(`${row}-${col}`)) {
+          return;
+        }
+
+        const value = values[bit];
+        let hint: (Hint & { priority: number }) | null = null;
+
+        if (need === 1) {
+          hint = {
+            row,
+            col,
+            mark: "erased",
+            reason: `${label} is already complete, so this ${value} is extra.`,
+            priority: 0,
+          };
+        } else if (need % value !== 0) {
+          hint = {
+            row,
+            col,
+            mark: "erased",
+            reason: `${label} still needs ×${need}, and ${value} doesn't divide it.`,
+            priority: 1,
+          };
+        } else if (combos.every((mask) => mask & (1 << bit))) {
+          hint = {
+            row,
+            col,
+            mark: "selected",
+            reason: `Every way to make ×${need} in ${label} uses this ${value}.`,
+            priority: 2,
+          };
+        } else if (combos.every((mask) => !(mask & (1 << bit)))) {
+          hint = {
+            row,
+            col,
+            mark: "erased",
+            reason: `No way to make ×${need} in ${label} uses this ${value}.`,
+            priority: 3,
+          };
+        }
+
+        const expected = puzzle.solution[row][col] ? "selected" : "erased";
+
+        if (hint && hint.mark === expected) {
+          found.push(hint);
+        }
+      });
+    }
+  }
+
+  if (found.length === 0) {
+    return null;
+  }
+
+  const bestPriority = Math.min(...found.map((hint) => hint.priority));
+  const choice = sample(
+    found.filter((candidate) => candidate.priority === bestPriority),
+  );
+
+  return {
+    row: choice.row,
+    col: choice.col,
+    mark: choice.mark,
+    reason: choice.reason,
   };
 }
