@@ -1,4 +1,5 @@
 import type { ComponentPropsWithoutRef } from "react";
+import { sound } from "../audio/sound";
 import { vibrateOnButtonPress } from "./haptics";
 
 type HapticButtonProps = ComponentPropsWithoutRef<"button"> & {
@@ -16,6 +17,8 @@ export function HapticButton({
       onClick={(event) => {
         if (haptic === "button") {
           vibrateOnButtonPress();
+          sound.unlock();
+          sound.play("click");
         }
 
         onClick?.(event);

@@ -1,7 +1,4 @@
-import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { RowFragment } from "./components/RowFragment";
-import { TargetBadge } from "./components/TargetBadge";
 import {
   applyRevealedMarks,
   countMatchedTargetsOnAxis,
@@ -776,63 +773,7 @@ describe("logic helpers", () => {
   });
 });
 
-describe("component rendering", () => {
-  it("renders hidden blind targets as plain question marks with blind labeling", () => {
-    const html = renderToStaticMarkup(
-      <TargetBadge target={null} concealment="blind" progress={1} resolved={false} />,
-    );
-
-    expect(html).toContain("?");
-    expect(html).toContain("Blind");
-    expect(html).not.toContain("picks");
-  });
-
-  it("hides the running progress number for quiet target badges", () => {
-    const html = renderToStaticMarkup(
-      <TargetBadge
-        target={12}
-        progress={6}
-        progressHidden
-        resolved={false}
-      />,
-    );
-
-    expect(html).toContain("12");
-    expect(html).not.toContain(">6<");
-    expect(html).not.toContain("...");
-  });
-
-  it("dims and disables row cells outside an active commitment", () => {
-    const puzzle = createTestPuzzle({
-      size: 3,
-      board: [
-        [2, 3, 5],
-        [7, 11, 13],
-        [17, 19, 23],
-      ],
-      solution: [
-        [true, false, false],
-        [false, true, false],
-        [false, false, true],
-      ],
-      rowTargets: [2, 11, 23],
-      colTargets: [2, 11, 23],
-    });
-    const html = renderToStaticMarkup(
-      <RowFragment
-        row={1}
-        puzzle={puzzle}
-        marks={createEmptyMarks(puzzle.size)}
-        focusKey={null}
-        activeCommitment={{ axis: "row", index: 0 }}
-        noEchoLine={null}
-        onPress={() => undefined}
-      />,
-    );
-
-    expect(html.match(/disabled=""/g)?.length ?? 0).toBe(puzzle.size);
-  });
-
+describe("teaching copy", () => {
   it("updates tool-lock teaching copy to reference visible targets", () => {
     expect(MODIFIER_DETAILS.toolLock.description).toContain("select mode");
     expect(MODIFIER_DETAILS.toolLock.description).toContain("visible target");

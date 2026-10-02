@@ -1,15 +1,12 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import {
   areAllRowTargetsMet,
-  isCellBlockedByCommitment,
-  isCellBlockedByNoEcho,
-  isCellBlockedBySpotlight,
-  isCellDelayed,
   isHintGateUnlocked,
   revealHint,
   type DifficultyId,
   type ToolMode,
 } from "./game";
+import { explainCellBlock, getCellBlock } from "./cellState";
 import {
   applyCorrectMark,
   applyMistake,
@@ -38,6 +35,8 @@ const FEEDBACK_DURATION_MS = { hint: 5200, danger: 2600, info: 3200 } as const;
 
 export type FeedbackTone = keyof typeof FEEDBACK_DURATION_MS;
 
+export type CellPressResult = "correct" | "mistake" | "blocked" | "ignored";
+
 export type Feedback = {
   id: number;
   tone: FeedbackTone;
@@ -51,6 +50,10 @@ export function useCrossMultiplyGame() {
   const [unlockDialogOpen, setUnlockDialogOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  /** Correct player marks in a row; drives the combo meter and rising notes. */
+  const [streak, setStreak] = useState(0);
+  /** Bumps for every fresh session, including retries of the same puzzle. */
+  const [runId, setRunId] = useState(0);
   const themeToggleTimes = useRef<number[]>([]);
   const feedbackId = useRef(0);
 
@@ -170,6 +173,8 @@ export function useCrossMultiplyGame() {
     nextDifficultyId = difficulty,
   ) => {
     setFeedback(null);
+    setStreak(0);
+    setRunId((current) => current + 1);
     setPersisted((current) => ({
       ...current,
       difficulty: nextDifficultyId,
@@ -221,6 +226,11 @@ export function useCrossMultiplyGame() {
   };
 
   const moveToNextLevel = () => {
+    // A second press while the next board generates would grant two hints.
+    if (isPending || session.status !== "won") {
+      return;
+    }
+
     const nextLevel = puzzle.level + 1;
 
     setPersisted((current) => {
@@ -256,23 +266,27 @@ export function useCrossMultiplyGame() {
     );
   };
 
-  const handleCellPress = (row: number, col: number, toolOverride?: ToolMode) => {
-    if (
-      session.status !== "playing" ||
-      session.marks[row][col] !== "hidden" ||
-      isCellDelayed(puzzle, session.marks, row, col) ||
-      isCellBlockedBySpotlight(puzzle, session.marks, row, col) ||
-      isCellBlockedByCommitment(session.activeCommitment, row, col) ||
-      isCellBlockedByNoEcho(session.noEchoLine, row, col)
-    ) {
-      return;
+  const handleCellPress = (
+    row: number,
+    col: number,
+    toolOverride?: ToolMode,
+  ): CellPressResult => {
+    if (session.status !== "playing" || session.marks[row][col] !== "hidden") {
+      return "ignored";
+    }
+
+    const block = getCellBlock(session, row, col);
+
+    if (block) {
+      notify("info", explainCellBlock(session, block));
+      return "blocked";
     }
 
     const tool = toolOverride ?? session.mode;
 
     if (session.toolLocked && tool !== session.mode) {
       notify("info", "Erase unlocks after you match a visible target.");
-      return;
+      return "blocked";
     }
 
     const value = puzzle.board[row][col];
@@ -288,18 +302,20 @@ export function useCrossMultiplyGame() {
         "player",
       );
       setPersisted(state);
+      setStreak((current) => current + 1);
 
       if (notices.length > 0) {
         notify("info", notices.join(" "));
       } else if (feedback?.tone === "danger") {
         setFeedback(null);
       }
-      return;
+      return "correct";
     }
 
     vibrateOnMistake();
     const heartsLeft = session.hearts - 1;
     setPersisted(applyMistake(persisted, row, col));
+    setStreak(0);
 
     if (heartsLeft > 0) {
       notify(
@@ -307,6 +323,7 @@ export function useCrossMultiplyGame() {
         `${shouldSelect ? `${value} belongs in the product.` : `${value} isn't part of the product.`} ${heartsLeft} ${heartsLeft === 1 ? "heart" : "hearts"} left.`,
       );
     }
+    return "mistake";
   };
 
   const requestHint = () => {
@@ -383,7 +400,9 @@ export function useCrossMultiplyGame() {
     onboardingDismissed,
     progress,
     puzzle,
+    runId,
     session,
+    streak,
     theme,
     unlockDialogOpen,
     changeDifficulty,
@@ -392,6 +411,7 @@ export function useCrossMultiplyGame() {
     dismissOnboarding,
     handleCellPress,
     moveToNextLevel,
+    notify,
     rerollCurrentBoard,
     rerollLevel,
     retryLevel,

@@ -1,5 +1,0 @@
-export const secondaryActionClass =
-  "rounded-[1.25rem] border border-[var(--panel-border)] bg-[var(--panel-muted)] px-5 py-3.5 text-xs font-black uppercase tracking-[0.16em] text-[var(--text-primary)] shadow-[inset_0_-2px_0_color-mix(in_oklch,var(--panel-border)_45%,transparent)] spring-transition hover:-translate-y-0.5 hover:bg-[var(--panel-bg)] active:translate-y-0 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]";
-
-export const primaryActionClass =
-  "rounded-[1.25rem] bg-[var(--accent)] px-5 py-3.5 text-xs font-black uppercase tracking-[0.16em] text-[var(--cell-highlight-text)] shadow-[inset_0_-3px_0_color-mix(in_oklch,var(--accent-strong)_40%,transparent),0_12px_24px_var(--glow-primary)] spring-transition hover:-translate-y-0.5 hover:scale-[1.02] active:translate-y-0 active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent-strong)]";

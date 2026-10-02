@@ -528,6 +528,15 @@ export function loadPersistedState(): PersistedState {
   }
 }
 
+export function getRunSummary(session: SessionState): RunSummary {
+  return {
+    heartsLeft: session.hearts,
+    maxHearts: session.maxHearts,
+    hintsUsed: session.hintsUsed,
+    mistakes: session.mistakes,
+  };
+}
+
 export function getLevelResult(
   progress: ProgressState,
   difficulty: DifficultyId,
@@ -536,7 +545,7 @@ export function getLevelResult(
   return progress[difficulty].levelResults[String(level)] ?? null;
 }
 
-function computeStars(_puzzle: Puzzle, run: RunSummary) {
+export function computeStars(_puzzle: Puzzle, run: RunSummary) {
   let stars = 1;
 
   if (
@@ -552,7 +561,7 @@ function computeStars(_puzzle: Puzzle, run: RunSummary) {
   return stars;
 }
 
-function evaluateMissions(
+export function evaluateMissions(
   puzzle: Puzzle,
   run: RunSummary,
   eraseUsedBeforeRowsResolved: boolean,

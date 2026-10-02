@@ -1,123 +1,133 @@
-import { useEffect } from "react";
-import { ActionToast } from "./components/ActionToast";
-import { DifficultyRail } from "./components/DifficultyRail";
-import { GameDialogs } from "./components/GameDialogs";
-import { GameHeader } from "./components/GameHeader";
-import { GameSidebar } from "./components/GameSidebar";
-import { MobileToolDock } from "./components/MobileToolDock";
-import { PuzzleBoard } from "./components/PuzzleBoard";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { sound } from "./audio/sound";
+import { Hud } from "./hud/Hud";
+import type { CellRef } from "./scene/Board";
+import { emitFx } from "./scene/fxBus";
+import { GameScene } from "./scene/GameScene";
+import type { StageRect } from "./scene/layout";
+import { WORLDS } from "./scene/worlds";
 import { useCrossMultiplyGame } from "./useCrossMultiplyGame";
+import { useGameFx } from "./useGameFx";
+
+const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
+
+function usePrefersReducedMotion() {
+  return useSyncExternalStore(
+    (listener) => {
+      const query = window.matchMedia(REDUCED_MOTION_QUERY);
+      query.addEventListener("change", listener);
+      return () => query.removeEventListener("change", listener);
+    },
+    () => window.matchMedia(REDUCED_MOTION_QUERY).matches,
+    () => false,
+  );
+}
 
 function App() {
   const game = useCrossMultiplyGame();
+  const world = WORLDS[game.difficulty];
+  const reducedMotion = usePrefersReducedMotion();
+  const [hoverCell, setHoverCell] = useState<CellRef | null>(null);
+  const [focusCell, setFocusCell] = useState<CellRef | null>(null);
+  const [stage, setStage] = useState<StageRect | null>(null);
 
-  // Pointer move handler for spotlight-slab mouse hover effects
+  useGameFx(game.session, game.runId, game.streak, world);
+
   useEffect(() => {
-    const handlePointerMove = (e: PointerEvent) => {
-      const target = e.target as HTMLElement;
-      const slab = target.closest(".spotlight-slab") as HTMLElement;
-      if (slab) {
-        const rect = slab.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        slab.style.setProperty("--mouse-x", `${x}px`);
-        slab.style.setProperty("--mouse-y", `${y}px`);
-      }
+    // Browsers only start audio after a gesture; pause it with the tab.
+    const unlock = () => sound.unlock();
+    const handleVisibility = () => sound.setPaused(document.visibilityState !== "visible");
+    // Touch pointerdown is not a user activation; iOS needs touchend/click.
+    const gestures = ["pointerdown", "pointerup", "touchend", "click", "keydown"];
+    gestures.forEach((name) => window.addEventListener(name, unlock));
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      gestures.forEach((name) => window.removeEventListener(name, unlock));
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
-    window.addEventListener("pointermove", handlePointerMove);
-    return () => window.removeEventListener("pointermove", handlePointerMove);
   }, []);
 
+  useEffect(() => {
+    const root = document.documentElement.style;
+    root.setProperty("--world-accent", world.accent);
+    root.setProperty("--world-accent-ink", world.accentInk);
+    document
+      .querySelector('meta[name="theme-color"]')
+      ?.setAttribute("content", game.theme === "dark" ? world.night.top : world.day.top);
+  }, [game.theme, world]);
+
+  const handleStageChange = useCallback((rect: StageRect) => {
+    setStage((current) =>
+      current &&
+      current.x === rect.x &&
+      current.y === rect.y &&
+      current.width === rect.width &&
+      current.height === rect.height
+        ? current
+        : rect,
+    );
+  }, []);
+
+  const pressCell = (row: number, col: number, alternate: boolean) => {
+    const mode = game.session.mode;
+    const result = game.handleCellPress(
+      row,
+      col,
+      alternate ? (mode === "select" ? "erase" : "select") : undefined,
+    );
+
+    if (result === "blocked") {
+      emitFx({ type: "blocked", row, col });
+    }
+  };
+
   return (
-    <div className="relative min-h-[100dvh] overflow-x-hidden bg-[var(--app-bg)] text-[var(--text-primary)] transition-colors duration-300">
-      {/* Tactile Noise Overlay */}
-      <div className="noise-overlay" />
-
-      {/* Floating Animated Mesh Glows */}
-      <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-        <div className="absolute left-[5%] top-[10%] h-[35vw] w-[35vw] rounded-full bg-[var(--glow-secondary)] opacity-35 blur-[90px] animate-[pulse_10s_infinite_alternate]" />
-        <div className="absolute right-[10%] bottom-[15%] h-[40vw] w-[40vw] rounded-full bg-[var(--glow-primary)] opacity-45 blur-[110px] animate-[pulse_12s_infinite_alternate_2s]" />
-      </div>
-
-      <main className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-[86rem] flex-col px-3 pb-24 pt-3 sm:px-6 sm:pb-28 sm:pt-6 lg:px-8">
-        <div className="puzzle-surface relative flex flex-col gap-4 rounded-[1.75rem] border border-[var(--panel-border)] p-3 shadow-[0_24px_80px_var(--shadow-board)] backdrop-blur-md sm:gap-6 sm:rounded-[2rem] sm:p-6 lg:p-8">
-
-          <GameHeader
-            currentResult={game.currentResult}
-            difficulty={game.difficulty}
-            hintGateUnlocked={game.hintGateUnlocked}
-            hintStock={game.hintStock}
-            onChangeDifficulty={game.changeDifficulty}
-            onReroll={game.rerollCurrentBoard}
-            onToggleTheme={game.toggleTheme}
-            onUseHint={game.requestHint}
-            progress={game.progress}
-            puzzle={game.puzzle}
-            sessionStatus={game.session.status}
-            theme={game.theme}
-          />
-
-          <div className="mt-1 grid min-w-0 gap-5 sm:gap-6 grid-cols-1 lg:grid-cols-[1fr_21rem] xl:grid-cols-[1fr_24rem]">
-            <div className="flex flex-col gap-4 sm:gap-6">
-              <PuzzleBoard
-                difficulty={game.difficulty}
-                onCellPress={game.handleCellPress}
-                onDismissOnboarding={game.dismissOnboarding}
-                onboardingDismissed={game.onboardingDismissed}
-                progress={game.progress}
-                session={game.session}
-              />
-
-              <DifficultyRail
-                className="flex sm:hidden"
-                difficulty={game.difficulty}
-                onChange={game.changeDifficulty}
-                progress={game.progress}
-              />
-            </div>
-
-            <div className="animate-spring-in">
-              <GameSidebar
-                difficulty={game.difficulty}
-                dismissedModifierTips={game.dismissedModifierTips}
-                onDismissModifierTip={game.dismissModifierTip}
-                onModeChange={game.setMode}
-                progress={game.progress}
-                puzzle={game.puzzle}
-                session={game.session}
-              />
-            </div>
-          </div>
-        </div>
-
-        {game.session.status === "playing" && (
-          <MobileToolDock
-            mode={game.session.mode}
-            onModeChange={game.setMode}
-            toolLocked={game.session.toolLocked}
-          />
-        )}
-
-        <ActionToast
-          feedback={game.session.status === "playing" ? game.feedback : null}
-          isPending={game.isPending}
-        />
-
-        <GameDialogs
-          difficulty={game.difficulty}
-          hintStock={game.hintStock}
-          onCloseUnlock={game.closeUnlockDialog}
-          onMoveNext={game.moveToNextLevel}
-          onReroll={game.rerollLevel}
-          onRetry={game.retryLevel}
-          progress={game.progress}
-          puzzle={game.puzzle}
-          session={game.session}
-          status={game.session.status}
-          unlockDialogOpen={game.unlockDialogOpen}
-        />
-      </main>
-    </div>
+    <main className="fixed inset-0 overflow-hidden bg-[#0b0d1a] font-sans text-white select-none">
+      <h1 className="sr-only">Cross Multiply</h1>
+      <GameScene
+        session={game.session}
+        runId={game.runId}
+        theme={world}
+        themeMode={game.theme}
+        mode={game.session.mode}
+        hoverCell={hoverCell}
+        focusCell={focusCell}
+        streak={game.streak}
+        stage={stage}
+        reducedMotion={reducedMotion}
+        onHoverCell={setHoverCell}
+        onCellPress={pressCell}
+      />
+      <Hud
+        world={world}
+        session={game.session}
+        progress={game.progress}
+        difficulty={game.difficulty}
+        currentResult={game.currentResult}
+        hintStock={game.hintStock}
+        hintGateUnlocked={game.hintGateUnlocked}
+        feedback={game.feedback}
+        isPending={game.isPending}
+        streak={game.streak}
+        theme={game.theme}
+        onboardingDismissed={game.onboardingDismissed}
+        dismissedModifierTips={game.dismissedModifierTips}
+        unlockDialogOpen={game.unlockDialogOpen}
+        onStageChange={handleStageChange}
+        onFocusCell={setFocusCell}
+        onPressCell={pressCell}
+        onModeChange={game.setMode}
+        onHint={game.requestHint}
+        onChangeDifficulty={game.changeDifficulty}
+        onToggleTheme={game.toggleTheme}
+        onReroll={game.rerollLevel}
+        onRetry={game.retryLevel}
+        onNext={game.moveToNextLevel}
+        onDismissModifierTip={game.dismissModifierTip}
+        onDismissOnboarding={game.dismissOnboarding}
+        onCloseUnlock={game.closeUnlockDialog}
+      />
+    </main>
   );
 }
 

@@ -6,6 +6,10 @@ import { VitePWA } from "vite-plugin-pwa";
 
 // https://vite.dev/config/
 export default defineConfig({
+  build: {
+    // three.js and the scene ship as one chunk; this keeps the warning meaningful.
+    chunkSizeWarningLimit: 1800,
+  },
   plugins: [
     react(),
     babel({ presets: [reactCompilerPreset()] }),
@@ -17,7 +21,7 @@ export default defineConfig({
       manifest: {
         name: "Cross Multiply",
         short_name: "Cross Multiply",
-        description: "A multiply-first number puzzle with endless generated levels and offline play.",
+        description: "A multiply-first 3D number puzzle with five worlds, endless generated levels, and offline play.",
         theme_color: "#090b13",
         background_color: "#090b13",
         display: "standalone",
@@ -43,7 +47,9 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,svg,png,ico}"],
+        globPatterns: ["**/*.{js,css,html,svg,png,ico,woff,woff2}"],
+        // The three.js bundle is larger than Workbox's 2 MiB default.
+        maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         cleanupOutdatedCaches: true,
       },
       devOptions: {
