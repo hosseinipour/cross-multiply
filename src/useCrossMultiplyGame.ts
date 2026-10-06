@@ -24,6 +24,7 @@ import {
   type ThemeMode,
 } from "./appState";
 import type { ModifierId } from "./progression";
+import { sound } from "./audio/sound";
 import {
   vibrateOnCorrectPick,
   vibrateOnMistake,
@@ -54,7 +55,7 @@ export function useCrossMultiplyGame() {
   const [streak, setStreak] = useState(0);
   /** Bumps for every fresh session, including retries of the same puzzle. */
   const [runId, setRunId] = useState(0);
-  const themeToggleTimes = useRef<number[]>([]);
+  const soundToggleTimes = useRef<number[]>([]);
   const feedbackId = useRef(0);
 
   const {
@@ -126,30 +127,32 @@ export function useCrossMultiplyGame() {
     }));
   };
 
-  const toggleTheme = () => {
-    const nextTheme = theme === "dark" ? "light" : "dark";
+  const toggleSoundEffects = () => {
+    sound.unlock();
+    sound.update({ sfx: !sound.getSettings().sfx });
     const now = Date.now();
     const recentToggles = [
-      ...themeToggleTimes.current.filter(
+      ...soundToggleTimes.current.filter(
         (time) => now - time <= CHEAT_TOGGLE_WINDOW_MS,
       ),
       now,
     ];
 
     if (recentToggles.length >= CHEAT_TOGGLE_COUNT) {
-      themeToggleTimes.current = [];
+      soundToggleTimes.current = [];
       setUnlockDialogOpen(true);
       setPersisted((current) => ({
         ...current,
-        theme: nextTheme,
         progress: unlockAllDifficulties(current.progress),
       }));
-      return;
+      return true;
     }
 
-    themeToggleTimes.current = recentToggles;
-    setTheme(nextTheme);
+    soundToggleTimes.current = recentToggles;
+    return false;
   };
+
+  const toggleTheme = () => setTheme(theme === "dark" ? "light" : "dark");
 
   const dismissModifierTip = (modifierId: ModifierId) => {
     setPersisted((current) => ({
@@ -418,5 +421,6 @@ export function useCrossMultiplyGame() {
     setMode,
     requestHint,
     toggleTheme,
+    toggleSoundEffects,
   };
 }

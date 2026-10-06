@@ -57,6 +57,7 @@ export type HudProps = {
   onHint: () => void;
   onChangeDifficulty: (difficulty: DifficultyId) => void;
   onToggleTheme: () => void;
+  onToggleSoundEffects: () => boolean;
   onReroll: () => void;
   onRetry: () => void;
   onNext: () => void;
@@ -220,6 +221,11 @@ export function Hud(props: HudProps) {
           difficulty={difficulty}
           theme={props.theme}
           onToggleTheme={props.onToggleTheme}
+          onToggleSoundEffects={() => {
+            if (props.onToggleSoundEffects()) {
+              setMenuOpen(false);
+            }
+          }}
           onReroll={props.onReroll}
           onClose={() => setMenuOpen(false)}
         />

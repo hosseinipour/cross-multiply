@@ -36,6 +36,8 @@ import { onFx } from "./fxBus";
 import { getBoardFrame, TILE_HEIGHT, TILE_STEP, type BoardFrame } from "./layout";
 import { PILLAR_HEIGHT, TargetPillar } from "./TargetPillar";
 import { Tile } from "./Tile";
+import { IslandDetails } from "./IslandDetails";
+import { getBoardSurface, getSurfaceTexture } from "./textures";
 import type { WorldTheme } from "./worlds";
 
 export type CellRef = { row: number; col: number };
@@ -115,6 +117,8 @@ function LineCurtain({
     axis === "row" ? [length, height, TILE_STEP * 0.98] : [TILE_STEP * 0.98, height, length];
 
   useFrame((state, delta) => {
+    const material = mesh.current?.material as ShaderMaterial | undefined;
+    if (!material) return;
     material.uniforms.uTime.value = state.clock.elapsedTime;
     (material.uniforms.uColor.value as Color).set(color);
     material.uniforms.uOpacity.value +=
@@ -262,17 +266,34 @@ function ComboEmblem({
 }
 
 function BoardBase({ frame, theme }: { frame: BoardFrame; theme: WorldTheme }) {
+  const surface = getBoardSurface(theme.id);
+  const enhanced = surface !== null;
   const width = frame.width + 0.7;
   const depth = frame.depth + 0.7;
-  const geometries = useMemo(
-    () => ({
+  const geometries = useMemo(() => {
+    const island = new ConeGeometry(
+      Math.max(width, depth) * 0.6,
+      Math.max(width, depth) * 0.95,
+      enhanced ? 11 : 7,
+      enhanced ? 5 : 3,
+    );
+    if (enhanced) {
+      const positions = island.getAttribute("position");
+      for (let i = 0; i < positions.count; i++) {
+        const x = positions.getX(i), y = positions.getY(i), z = positions.getZ(i);
+        const strata = 1 + Math.sin(y * 5.7) * 0.07 + Math.sin(x * 3.1 + z * 2.3) * 0.05;
+        positions.setXYZ(i, x * strata, y, z * strata);
+      }
+      island.computeVertexNormals();
+    }
+    return {
       top: new RoundedBoxGeometry(width, 0.24, depth, 3, 0.1),
       side: new RoundedBoxGeometry(width - 0.2, 0.7, depth - 0.2, 2, 0.12),
-      island: new ConeGeometry(Math.max(width, depth) * 0.6, Math.max(width, depth) * 0.95, 7, 3),
+      island,
+      ledge: new RoundedBoxGeometry(width - 0.35, 0.16, depth - 0.35, 3, 0.07),
       shard: new ConeGeometry(0.6, 2.2, 5, 1),
-    }),
-    [depth, width],
-  );
+    };
+  }, [depth, enhanced, width]);
   useEffect(
     () => () => {
       Object.values(geometries).forEach((geometry) => geometry.dispose());
@@ -282,18 +303,32 @@ function BoardBase({ frame, theme }: { frame: BoardFrame; theme: WorldTheme }) {
 
   const materials = useMemo(
     () => ({
-      top: new MeshStandardMaterial({ color: theme.slab, roughness: 0.85 }),
-      side: new MeshStandardMaterial({ color: theme.slabSide, roughness: 0.95, flatShading: true }),
-      rock: new MeshStandardMaterial({ color: theme.rock, roughness: 1, flatShading: true }),
+      top: new MeshStandardMaterial({
+        color: theme.slab,
+        roughness: surface?.roughness ?? 0.85,
+        bumpMap: surface ? getSurfaceTexture(surface.kind) : null,
+        bumpScale: surface ? surface.bump * 1.5 : 0,
+        metalness: surface ? surface.metalness * 0.5 : 0,
+      }),
+      side: new MeshStandardMaterial({
+        color: theme.slabSide,
+        roughness: 0.95,
+        bumpMap: surface ? getSurfaceTexture(surface.kind) : null,
+        bumpScale: surface ? 0.09 : 0,
+        flatShading: true,
+      }),
+      rock: new MeshStandardMaterial({
+        color: theme.rock,
+        roughness: 1,
+        flatShading: true,
+      }),
     }),
     // Seeded from the world at mount, then damped toward it each frame.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
-  const targetColors = useMemo(
-    () => ({ top: new Color(), side: new Color(), rock: new Color() }),
-    [],
-  );
+  useEffect(() => () => Object.values(materials).forEach((material) => material.dispose()), [materials]);
+  const targetColors = useMemo(() => ({ top: new Color(), side: new Color(), rock: new Color() }), []);
 
   useFrame((_, rawDelta) => {
     const delta = Math.min(rawDelta, 1 / 20);
@@ -311,6 +346,9 @@ function BoardBase({ frame, theme }: { frame: BoardFrame; theme: WorldTheme }) {
     <group>
       <mesh geometry={geometries.top} material={materials.top} position={[0, -0.12, 0]} receiveShadow />
       <mesh geometry={geometries.side} material={materials.side} position={[0, -0.55, 0]} receiveShadow />
+      {enhanced && (
+        <mesh geometry={geometries.ledge} material={materials.rock} position={[0, -0.82, 0]} receiveShadow />
+      )}
       <mesh
         geometry={geometries.island}
         material={materials.rock}
@@ -563,6 +601,7 @@ export function Board({
   return (
     <group>
       <BoardBase frame={frame} theme={theme} />
+      <IslandDetails frame={frame} theme={theme} reducedMotion={reducedMotion} />
       <BoardFxDirector frame={frame} theme={theme} puzzleSize={puzzle.size} />
 
       {Array.from({ length: puzzle.size }, (_, index) => pillarFor("row", index))}
