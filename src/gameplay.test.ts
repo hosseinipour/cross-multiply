@@ -4,6 +4,8 @@ import {
   applyMistake,
   buildSessionFromPuzzle,
   createProgressState,
+  isDifficultyAvailable,
+  unlockAllDifficulties,
   loadPersistedState,
   setClockRunning,
   STORAGE_KEY,
@@ -15,6 +17,7 @@ import {
   createEmptyMarks,
   createPuzzle,
   describeUnlocks,
+  DIFFICULTY_ORDER,
   findLogicalHint,
   revealHint,
   type CellMark,
@@ -289,6 +292,22 @@ describe("session restore", () => {
     });
   }
 
+  it("keeps cheated worlds open after reloading without granting clears", () => {
+    const state = createState(createPuzzle(1, "mythic"));
+    const progress = unlockAllDifficulties(state.progress);
+    stubStorage({ ...state, progress });
+
+    const loaded = loadPersistedState();
+
+    expect(loaded.difficulty).toBe("mythic");
+    for (const id of DIFFICULTY_ORDER) {
+      expect(isDifficultyAvailable(loaded.progress, id)).toBe(true);
+      expect(loaded.progress[id].clearedLevels).toBe(0);
+      expect(loaded.progress[id].highestUnlockedLevel).toBe(1);
+      expect(loaded.progress[id].levelResults).toEqual({});
+    }
+  });
+
   it("brings back an in-progress board after a reload", () => {
     const puzzle = createPuzzle(1, "easy");
     const state = createState(puzzle);
@@ -327,5 +346,26 @@ describe("formatDuration", () => {
     expect(formatDuration(0)).toBe("0:00");
     expect(formatDuration(65_000)).toBe("1:05");
     expect(formatDuration(3_725_000)).toBe("1:02:05");
+  });
+});
+
+describe("world unlock cheat", () => {
+  it("opens all worlds and preserves earned progress without mutating it", () => {
+    const state = applyCorrectMark(
+      applyCorrectMark(
+        createState(createTestPuzzle()), 0, 0, "selected", "player", 2000,
+      ).state,
+      1, 1, "selected", "player", 5000,
+    ).state;
+    const original = structuredClone(state.progress);
+    const unlocked = unlockAllDifficulties(state.progress);
+
+    for (const id of DIFFICULTY_ORDER) {
+      expect(isDifficultyAvailable(unlocked, id)).toBe(true);
+      expect(unlocked[id]).toEqual({ ...original[id], cheatUnlocked: true });
+    }
+    expect(state.progress).toEqual(original);
+    expect(isDifficultyAvailable(state.progress, "expert")).toBe(false);
+    expect(unlockAllDifficulties(unlocked)).toEqual(unlocked);
   });
 });

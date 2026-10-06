@@ -51,6 +51,7 @@ export function MenuSheet({
   theme,
   onToggleTheme,
   onReroll,
+  onToggleSoundEffects,
   onClose,
 }: {
   session: SessionState;
@@ -59,6 +60,7 @@ export function MenuSheet({
   theme: ThemeMode;
   onToggleTheme: () => void;
   onReroll: () => void;
+  onToggleSoundEffects: () => void;
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<Tab>("level");
@@ -118,10 +120,7 @@ export function MenuSheet({
               label="Sound effects"
               icon={<Volume2 className="size-5" strokeWidth={2} />}
               on={settings.sfx}
-              onChange={() => {
-                sound.unlock();
-                sound.update({ sfx: !settings.sfx });
-              }}
+              onChange={onToggleSoundEffects}
             />
             <Toggle
               label="Music"

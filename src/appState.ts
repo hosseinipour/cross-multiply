@@ -57,6 +57,8 @@ export type WinSummary = {
 };
 
 export type DifficultyProgress = {
+  /** Cheat access is separate from earned clears and level results. */
+  cheatUnlocked?: boolean;
   highestUnlockedLevel: number;
   clearedLevels: number;
   levelResults: Record<string, LevelResult>;
@@ -385,6 +387,7 @@ function sanitizeProgressState(
       : legacyHighest;
 
     nextProgress[id] = {
+      ...(entry?.cheatUnlocked === true ? { cheatUnlocked: true } : {}),
       clearedLevels,
       highestUnlockedLevel: Math.max(highestUnlockedLevel, clearedLevels + 1),
       levelResults,
@@ -400,7 +403,7 @@ export function isDifficultyAvailable(
 ) {
   const unlockSource = getDifficultyUnlockSource(difficulty);
 
-  if (!unlockSource) {
+  if (!unlockSource || progress[difficulty].cheatUnlocked === true) {
     return true;
   }
 
@@ -419,42 +422,8 @@ export function getNextLockedDifficulty(progress: ProgressState) {
 export function unlockAllDifficulties(
   progress: ProgressState,
 ): ProgressState {
-  const requiredClears = Object.fromEntries(
-    DIFFICULTY_ORDER.map((id) => [id, 0]),
-  ) as Record<DifficultyId, number>;
-
-  for (const difficulty of DIFFICULTY_ORDER) {
-    const source = getDifficultyUnlockSource(difficulty);
-
-    if (!source) {
-      continue;
-    }
-
-    requiredClears[source] = Math.max(
-      requiredClears[source],
-      getDifficultyUnlockRequirement(difficulty),
-    );
-  }
-
   return Object.fromEntries(
-    DIFFICULTY_ORDER.map((id) => {
-      const clearedLevels = Math.max(
-        progress[id].clearedLevels,
-        requiredClears[id],
-      );
-
-      return [
-        id,
-        {
-          ...progress[id],
-          clearedLevels,
-          highestUnlockedLevel: Math.max(
-            progress[id].highestUnlockedLevel,
-            clearedLevels + 1,
-          ),
-        },
-      ];
-    }),
+    DIFFICULTY_ORDER.map((id) => [id, { ...progress[id], cheatUnlocked: true }]),
   ) as ProgressState;
 }
 

@@ -10,6 +10,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  MeshPhysicalMaterial,
   RingGeometry,
 } from "three";
 import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
@@ -19,7 +20,7 @@ import type { GameStatus } from "../appState";
 import { vibrateOnButtonPress } from "../components/haptics";
 import { fx } from "./fx";
 import { TILE_HEIGHT, TILE_SIZE } from "./layout";
-import { FONT_BOLD, getSoftDotTexture } from "./textures";
+import { FONT_BOLD, getBoardSurface, getSoftDotTexture, getSurfaceTexture } from "./textures";
 import type { WorldTheme } from "./worlds";
 
 const LONG_PRESS_MS = 420;
@@ -111,14 +112,21 @@ export function Tile({
     lastHint: hintKey,
   });
 
+  const surface = getBoardSurface(theme.id);
   const materials = useMemo(() => {
     const soft = getSoftDotTexture();
     return {
-      body: new MeshStandardMaterial({
-        color: theme.tile,
-        roughness: 0.5,
-        metalness: 0.05,
-      }),
+      body: surface
+        ? new MeshPhysicalMaterial({
+            color: theme.tile,
+            roughness: surface.roughness,
+            metalness: surface.metalness,
+            clearcoat: surface.clearcoat,
+            clearcoatRoughness: 0.18,
+            bumpMap: getSurfaceTexture(surface.kind),
+            bumpScale: surface.bump,
+          })
+        : new MeshStandardMaterial({ color: theme.tile, roughness: 0.5, metalness: 0.05 }),
       seal: new MeshStandardMaterial({
         color: SEAL,
         emissive: SEAL,
@@ -164,6 +172,11 @@ export function Tile({
     },
     [materials],
   );
+
+  const materialState = useRef(materials);
+  useEffect(() => {
+    materialState.current = materials;
+  }, [materials]);
 
   // Track the transitions that need a one-shot reaction.
   useEffect(() => {
@@ -235,7 +248,7 @@ export function Tile({
   useFrame((frame, rawDelta) => {
     const delta = Math.min(rawDelta, 1 / 20);
     const g = group.current;
-    const mats = materials;
+    const mats = materialState.current;
     if (!g) {
       return;
     }
@@ -313,14 +326,14 @@ export function Tile({
     t.color.set(theme.tile);
     t.emissive.set("#000000");
     let emissiveIntensity = 0;
-    let roughness = 0.5;
+    let roughness = surface?.roughness ?? 0.5;
     let glowOpacity = 0;
 
     if (shown === "selected") {
       t.color.set(theme.crystal);
       t.emissive.set(theme.crystal);
       emissiveIntensity = 0.85 + (reducedMotion ? 0 : Math.sin(time * 2.4 + row + col) * 0.15);
-      roughness = 0.22;
+      roughness = surface ? Math.min(0.24, surface.roughness * 0.5) : 0.22;
       glowOpacity = 0.55;
       t.glowColor.set(theme.crystal);
     } else if (shown === "erased") {
@@ -373,6 +386,9 @@ export function Tile({
     easing.dampC(mats.body.emissive, t.emissive, 0.12, delta);
     easing.damp(mats.body, "emissiveIntensity", emissiveIntensity, 0.12, delta);
     easing.damp(mats.body, "roughness", roughness, 0.2, delta);
+    if (mats.body instanceof MeshPhysicalMaterial && surface) {
+      easing.damp(mats.body, "clearcoat", shown === "selected" ? 1 : surface.clearcoat, 0.2, delta);
+    }
     easing.dampC(mats.glow.color, t.glowColor, 0.1, delta);
     easing.damp(mats.glow, "opacity", glowOpacity, 0.12, delta);
 

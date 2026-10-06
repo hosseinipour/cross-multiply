@@ -120,6 +120,7 @@ function App() {
         onHint={game.requestHint}
         onChangeDifficulty={game.changeDifficulty}
         onToggleTheme={game.toggleTheme}
+        onToggleSoundEffects={game.toggleSoundEffects}
         onReroll={game.rerollLevel}
         onRetry={game.retryLevel}
         onNext={game.moveToNextLevel}

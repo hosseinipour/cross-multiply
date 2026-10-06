@@ -10,6 +10,7 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
+  MeshPhysicalMaterial,
   OctahedronGeometry,
   RingGeometry,
   SphereGeometry,
@@ -17,7 +18,7 @@ import {
   SpriteMaterial,
 } from "three";
 import type { TargetAxis } from "../game";
-import { FONT_BOLD, getSoftDotTexture } from "./textures";
+import { FONT_BOLD, getBoardSurface, getSoftDotTexture, getSurfaceTexture } from "./textures";
 import type { WorldTheme } from "./worlds";
 
 export const PILLAR_HEIGHT = 0.72;
@@ -97,10 +98,24 @@ export function TargetPillar({
   const wisps = useRef<Sprite[]>([]);
   const mountedAt = useRef(0);
 
+  const surface = getBoardSurface(theme.id);
   const materials = useMemo(
     () => ({
-      base: new MeshStandardMaterial({ color: theme.pillar, roughness: 0.75, flatShading: true }),
-      cap: new MeshStandardMaterial({ color: theme.pillarTop, roughness: 0.45 }),
+      base: new MeshStandardMaterial({
+        color: theme.pillar,
+        roughness: surface?.roughness ?? 0.75,
+        bumpMap: surface ? getSurfaceTexture(surface.kind) : null,
+        bumpScale: surface?.bump ?? 0,
+        flatShading: true,
+      }),
+      cap: surface
+        ? new MeshPhysicalMaterial({
+            color: theme.pillarTop,
+            roughness: surface.roughness,
+            clearcoat: surface.clearcoat,
+            metalness: surface.metalness,
+          })
+        : new MeshStandardMaterial({ color: theme.pillarTop, roughness: 0.45 }),
       ringTrack: new MeshBasicMaterial({ color: "#000000", transparent: true, opacity: 0.18, depthWrite: false }),
       ringFill: new MeshBasicMaterial({ color: theme.crystal, toneMapped: false }),
       gem: new MeshStandardMaterial({
@@ -131,6 +146,11 @@ export function TargetPillar({
     },
     [materials],
   );
+
+  const materialState = useRef(materials);
+  useEffect(() => {
+    materialState.current = materials;
+  }, [materials]);
 
   const colors = useMemo(
     () => ({
@@ -167,6 +187,7 @@ export function TargetPillar({
   );
 
   useFrame((frame, rawDelta) => {
+    const materials = materialState.current;
     const delta = Math.min(rawDelta, 1 / 20);
     const g = group.current;
     if (!g) {
